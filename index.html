@@ -246,6 +246,20 @@ html.light .fx1{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
   .h{flex-wrap:wrap}
 }
 @media(hover:none){ .btn,.seg button,.fav,.day{min-height:40px} }
+/* Farevarsel-forklaring */
+.ahelp{margin:-8px 0 14px;font-size:13px}.ahelp a{color:var(--muted);text-decoration:none}.ahelp a:hover{color:var(--text)}
+.ainfo{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15)}.ainfo a{color:var(--accent);font-size:13px}
+.lvl{border-radius:14px;padding:12px 14px;margin-bottom:8px;border:1px solid}
+.lvl.yellow{background:rgba(255,205,40,.13);border-color:rgba(255,205,40,.5)}
+.lvl.orange{background:rgba(255,140,30,.15);border-color:rgba(255,140,30,.55)}
+.lvl.red{background:rgba(240,50,50,.16);border-color:rgba(240,50,50,.6)}
+.lvlh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}.lvlh span:last-child{font-size:13px;color:var(--muted)}
+.atype{border-top:1px solid rgba(255,255,255,.08);padding:9px 2px}.atype summary{cursor:pointer;list-style:none;font-size:14px}
+.atype summary::-webkit-details-marker{display:none}.atype summary::before{content:"▸ ";color:var(--muted)}.atype[open] summary::before{content:"▾ "}
+.atips{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px 14px;font-size:14px;line-height:1.45}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;margin-right:8px;color:#10151f}
+.pill.yellow{background:#FFCD28}.pill.orange{background:#FF8C1E}.pill.red{background:#F03232;color:#fff}
+html.light .atype{border-color:rgba(15,27,45,.08)}html.light .ainfo{border-color:rgba(15,27,45,.12)}
 /* Lys modus */
 html.light{--glass:rgba(255,255,255,.55);--glass2:rgba(255,255,255,.78);--line:rgba(15,27,45,.13);--text:#0f1b2d;--muted:rgba(15,27,45,.62);--accent:#1f6fd1;--rain:#1a6fd6}
 html.light .tile,html.light .hr,html.light .aqgrid div,html.light .kv div,html.light .tide{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
@@ -293,6 +307,7 @@ footer a{color:var(--accent);text-decoration:none}
 
   <div class="favs" id="favs"></div>
   <div id="alerts"></div>
+  <div class="ahelp"><a href="#" data-help>ⓘ Hva betyr farevarsel-fargene?</a></div>
   <div class="err" id="err"></div>
 
   <div class="grid" id="main">
@@ -1063,6 +1078,74 @@ $("favs").addEventListener("click", e => {
   const b = e.target.closest(".fav"); if (b) setLoc({...favs[+b.dataset.i]});
 });
 
+/* ---------- Forklaring av farevarsler ---------- */
+const LEVEL_INFO = {
+  yellow: {name:"Gult nivå", resp:"Vær oppmerksom", sit:"Utfordrende situasjon",
+    text:"Det vanligste nivået. De fleste kan gjøre som vanlig, men det kan bli utfordrende situasjoner og lokale skader. Følg med på varselet."},
+  orange: {name:"Oransje nivå", resp:"Vær forberedt", sit:"Alvorlig situasjon",
+    text:"Sjeldent og alvorlig. Farlige situasjoner kan oppstå, det kan bli alvorlige skader, og liv kan gå tapt. Forbered deg og følg råd fra myndighetene."},
+  red: {name:"Rødt nivå", resp:"Sikre verdiene dine", sit:"Ekstrem situasjon",
+    text:"Brukes bare når det ventes ekstreme konsekvenser: stor fare for at liv går tapt og store ødeleggelser. Når et stort område rammes, kalles det ekstremvær og får et eget navn."}
+};
+// Råd per type: [hva det er, gult, oransje, rødt]
+const ALERT_TYPES = [
+  {k:["wind","vindkast","vind"], n:"Vindkast", w:"Kraftige vindkast over land.",
+   y:"Sikre løse ting ute (hagemøbler, trampoliner). Trær kan velte og gi forsinkelser i trafikken.",
+   o:"Hold deg mest mulig innendørs mens det står på. Unngå skog. Regn med strømbrudd og stengte veier eller ferger.",
+   r:"Bli inne. Sikre eiendom på forhånd, og ha lommelykt, vann og mat klart i tilfelle strømbrudd."},
+  {k:["gale","kuling","storm"], n:"Kuling og storm (sjø)", w:"Sterk vind på sjøen og langs kysten.",
+   y:"Farlig for småbåter – vurder å la båten ligge.", o:"Bli i havn. Sjekk fortøyningene.", r:"Bli i havn og hold deg unna utsatt kyst."},
+  {k:["rainflood","rain","mye regn","regn"], n:"Mye regn", w:"Store nedbørmengder over ett eller flere døgn.",
+   y:"Rens sluk og takrenner. Lokalt overvann og vanskelige kjøreforhold.",
+   o:"Fare for vann i kjellere, flom og jordskred. Hold deg unna bratte skråninger og flomstore bekker.",
+   r:"Alvorlig flom og skred kan skje. Følg rådene fra kommunen, og flytt verdier opp fra kjelleren."},
+  {k:["showers","styrtregn","byger"], n:"Styrtregn", w:"Svært mye regn på kort tid, ofte i byger.",
+   y:"Overvann i byer kan komme raskt. Unngå underganger og lavtliggende veier.",
+   o:"Ikke kjør gjennom vann på veien. Vann i kjellere er sannsynlig.", r:"Hold deg unna lavtliggende områder og bekker."},
+  {k:["snow","snø"], n:"Snø", w:"Mye snø på kort tid.",
+   y:"Vanskelige kjøreforhold. Beregn ekstra tid og bruk vinterdekk.",
+   o:"Veier kan bli stengt og tak tungt belastet. Vurder å utsette reiser.", r:"Bli hjemme om du kan. Fjern snø fra utsatte tak når det er trygt."},
+  {k:["blowingsnow","snøfokk"], n:"Snøfokk", w:"Snø som blåser og gir dårlig sikt, særlig på fjellet.",
+   y:"Dårlig sikt og kolonnekjøring på fjelloverganger. Sjekk trafikkmeldinger før du kjører.",
+   o:"Fjelloverganger kan stenge. Ikke kjør over fjellet uten å sjekke.", r:"Ikke reis over fjellet."},
+  {k:["ice","is","glatt"], n:"Is", w:"Glatte veier og fortau, ofte fordi regn fryser på kald bakke.",
+   y:"Bruk brodder og piggdekk, og kjør forsiktig.", o:"Svært glatt – utsett reiser om du kan.", r:"Bli hjemme om mulig."},
+  {k:["lightning","lyn","torden"], n:"Mye lyn", w:"Mye tordenvær.",
+   y:"Søk ly innendørs eller i bil. Unngå åpne områder, vann og høye enkeltstående trær.",
+   o:"Hold deg inne og trekk ut følsom elektronikk.", r:"Hold deg inne."},
+  {k:["polarlow","polart lavtrykk"], n:"Polart lavtrykk", w:"Små, intense lavtrykk i nord som kan gi plutselig sterk vind og kraftige snøbyger.",
+   y:"Været kan bli raskt verre. Vær forsiktig på sjøen og på fjellet.", o:"Unngå sjø og fjell mens det passerer.", r:"Bli inne og hold deg unna sjøen."},
+  {k:["stormsurge","vannstand","stormflo"], n:"Høy vannstand", w:"Uvanlig høy vannstand langs kysten (stormflo).",
+   y:"Brygger og lave kaier kan bli oversvømt. Sjekk båten.", o:"Flytt verdier opp fra kjellere og sjøboder nær sjøen.", r:"Hold deg unna sjøkanten og følg råd fra kommunen."},
+  {k:["forestfire","skogbrann"], n:"Skogbrannfare", w:"Svært tørt i skog og mark.",
+   y:"Ikke bruk åpen ild eller engangsgrill i skog og mark.", o:"Ikke bruk åpen ild i det hele tatt i naturen.", r:"Ikke bruk åpen ild i det hele tatt i naturen."},
+  {k:["icing","ising"], n:"Ising på skip", w:"Sjøsprøyt som fryser på båter og kan gjøre dem ustabile.",
+   y:"Gjelder mest sjøfolk – vurder å bli i havn med mindre båter.", o:"Bli i havn.", r:"Bli i havn."},
+  {k:["heat","hete"], n:"Hetebølge", w:"Uvanlig varmt over flere dager.",
+   y:"Drikk mye vann og unngå hard trening midt på dagen. Følg med på eldre og små barn.", o:"Hold deg i skyggen og hold boligen kjølig.", r:"Hold deg inne i det varmeste."},
+];
+// Mest spesifikke typer først (snøfokk før snø, stormflo før storm, styrtregn før regn)
+const TYPE_ORDER = ["Høy vannstand","Polart lavtrykk","Snøfokk","Styrtregn","Ising på skip","Skogbrannfare","Mye lyn","Hetebølge","Kuling og storm (sjø)","Vindkast","Mye regn","Snø","Is"];
+function alertType(p){
+  const s = " " + ((p.event||"")+" "+(p.eventAwarenessName||"")).toLowerCase();
+  const hit = t => t.k.some(k => new RegExp("(^|[^a-zæøå])" + k).test(s));
+  for (const n of TYPE_ORDER){ const t = ALERT_TYPES.find(x => x.n===n); if (t && hit(t)) return t; }
+  return null;
+}
+function alertHelpHtml(){
+  const lv = ["yellow","orange","red"].map(c => { const L = LEVEL_INFO[c];
+    return `<div class="lvl ${c}"><div class="lvlh"><span class="adot"></span><b>${L.name}</b><span>${L.resp} · ${L.sit}</span></div><div class="s">${L.text}</div></div>`; }).join("");
+  const types = ALERT_TYPES.map(t => `<details class="atype"><summary><b>${t.n}</b> <span class="s">– ${t.w}</span></summary>
+      <div class="atips"><div><span class="pill yellow">Gult</span>${t.y}</div><div><span class="pill orange">Oransje</span>${t.o}</div><div><span class="pill red">Rødt</span>${t.r}</div></div></details>`).join("");
+  return `<h3 style="font-size:20px;margin-bottom:6px">Hva betyr farevarslene?</h3>
+    <div class="s" style="margin-bottom:14px">MET bruker tre farger. Fargen sier hvor alvorlige konsekvensene ventes å bli, og hvor sannsynlig det er.</div>
+    ${lv}
+    <div class="s" style="margin:14px 0 10px">Hvor mye vind, regn eller snø som skal til, varierer med landsdel og årstid. Kriteriene er satt ut fra hva som er uvanlig der du bor, så samme vindstyrke kan gi gult varsel ett sted og ingen varsel et annet.</div>
+    <h4 style="margin:16px 0 8px">Varseltyper og hva du bør gjøre</h4>${types}
+    <div class="note">Flom, jordskred og snøskred varsles av NVE – se <a href="https://www.varsom.no/" target="_blank">varsom.no</a>.
+      Les mer hos <a href="https://www.met.no/vaer-og-klima/ekstremvaervarsler-og-andre-farevarsler" target="_blank">MET</a>.</div>`;
+}
+document.addEventListener("click", e => { const h = e.target.closest("[data-help]"); if (h){ e.preventDefault(); openModal(alertHelpHtml()); } });
 /* ---------- Farevarsler (MetAlerts) ---------- */
 const LVLTXT = {yellow:"Gult", orange:"Oransje", red:"Rødt"}, LVLORD = {red:3, orange:2, yellow:1};
 function alertLevel(f){ const a = (f.properties.awareness_level||"").split(";")[1]; return (a || f.properties.riskMatrixColor || "yellow").trim().toLowerCase(); }
@@ -1076,7 +1159,9 @@ async function loadAlerts(){
       const p = f.properties, c = alertLevel(f), iv = (f.when && f.when.interval) || [];
       return `<details class="alert ${c}"><summary><span class="adot"></span><b>${esc(p.eventAwarenessName||p.event)}</b> · ${LVLTXT[c]||""} nivå
         <span class="aarea">${esc(p.area||"")}</span><span class="atime">${iv[0] ? fmtDT(iv[0])+" – "+fmtDT(iv[1]) : ""}</span></summary>
-        <div class="abody">${p.description?`<p>${esc(p.description)}</p>`:""}${p.consequences?`<p><b>Konsekvenser:</b> ${esc(p.consequences)}</p>`:""}${p.instruction?`<p><b>Råd:</b> ${esc(p.instruction)}</p>`:""}</div></details>`;
+        <div class="abody">${p.description?`<p>${esc(p.description)}</p>`:""}${p.consequences?`<p><b>Konsekvenser:</b> ${esc(p.consequences)}</p>`:""}${p.instruction?`<p><b>Råd:</b> ${esc(p.instruction)}</p>`:""}
+          ${(() => { const L = LEVEL_INFO[c], T = alertType(p), tip = T ? T[c==="red"?"r":c==="orange"?"o":"y"] : "";
+            return L ? `<div class="ainfo"><p><b>${L.name} – ${L.resp.toLowerCase()}.</b> ${L.text}</p>${tip?`<p><b>Hva du bør gjøre:</b> ${tip}</p>`:""}<a href="#" data-help>Hva betyr fargene og varseltypene?</a></div>` : ""; })()}</div></details>`;
     }).join("");
   }catch(e){ box.innerHTML = ""; }
 }
