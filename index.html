@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Været – live varsel og radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg1:#0b1d3a;--bg2:#1b3b6f;--glass:rgba(255,255,255,.08);--glass2:rgba(255,255,255,.14);
+  --line:rgba(255,255,255,.14);--text:#f4f7fb;--muted:rgba(244,247,251,.66);--accent:#7cc4ff;
+  --warm:#ffb648;--cold:#5fb7ff;--rain:#4aa3ff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{
+  font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--text);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));background-attachment:fixed;
+  transition:background 1.2s ease;-webkit-font-smoothing:antialiased;
+}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.brand{font-weight:800;font-size:20px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;margin-right:auto}
+.brand span{opacity:.6;font-weight:500}
+.search{position:relative;flex:1;max-width:420px;min-width:220px}
+.search input{width:100%;padding:12px 16px 12px 42px;border-radius:14px;border:1px solid var(--line);
+  background:var(--glass);color:var(--text);font:inherit;font-size:15px;outline:none;backdrop-filter:blur(14px)}
+.search input::placeholder{color:var(--muted)}
+.search input:focus{border-color:rgba(124,196,255,.6);background:var(--glass2)}
+.search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.6}
+.results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:rgba(15,25,45,.96);border:1px solid var(--line);
+  border-radius:14px;overflow:hidden;display:none;z-index:1000;backdrop-filter:blur(20px)}
+.results button{display:block;width:100%;text-align:left;padding:11px 16px;background:none;border:0;color:var(--text);font:inherit;cursor:pointer}
+.results button:hover,.results button.active{background:rgba(124,196,255,.15)}
+.results small{color:var(--muted);margin-left:6px}
+.btn{padding:11px 15px;border-radius:14px;border:1px solid var(--line);background:var(--glass);color:var(--text);
+  font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px;backdrop-filter:blur(14px)}
+.btn:hover{background:var(--glass2)}
+.card{background:var(--glass);border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.h{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+/* Hero */
+.hero{padding:26px 28px;display:flex;flex-direction:column;justify-content:space-between;min-height:330px}
+.place{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:14px;margin-top:4px}
+.now{display:flex;align-items:center;gap:18px;margin:16px 0 6px}
+.now .ico{width:120px;height:120px;flex:none;filter:drop-shadow(0 8px 24px rgba(0,0,0,.25))}
+.temp{font-size:104px;font-weight:200;line-height:.9;letter-spacing:-.05em}
+.temp sup{font-size:40px;font-weight:300;vertical-align:top;position:relative;top:10px}
+.desc{font-size:20px;font-weight:500}
+.hl{color:var(--muted);font-size:15px;margin-top:4px}
+.nowcast{margin-top:18px}
+.nowcast .txt{font-size:14px;margin-bottom:8px}
+.ncbars{display:flex;align-items:flex-end;gap:4px;height:42px}
+.ncbars div{flex:1;background:var(--rain);border-radius:4px 4px 2px 2px;min-height:3px;opacity:.9}
+.nclab{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:5px}
+
+/* Details */
+.details{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:18px}
+@media(max-width:520px){.details{grid-template-columns:repeat(2,1fr)}}
+.tile{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 15px;min-height:96px;display:flex;flex-direction:column;justify-content:space-between}
+.tile .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tile .v{font-size:24px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.tile .v small{font-size:13px;font-weight:500;color:var(--muted)}
+.tile .s{font-size:12px;color:var(--muted)}
+.arrow{width:26px;height:26px;transition:transform .6s}
+.uvbar{height:5px;border-radius:3px;background:linear-gradient(90deg,#3ecf6a,#f5d33d,#f59a3d,#f2503a,#a64bd6);position:relative;margin-top:6px}
+.uvbar i{position:absolute;top:-3px;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.4);transform:translateX(-50%)}
+
+/* Hourly */
+section{margin-top:18px}
+.pad{padding:20px 22px}
+.hours{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+.hours::-webkit-scrollbar{height:6px}.hours::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:3px}
+.hr{flex:none;width:68px;text-align:center;padding:12px 4px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+.hr.cur{background:rgba(124,196,255,.18);border-color:rgba(124,196,255,.35)}
+.hr .t{font-size:12px;color:var(--muted);font-weight:500}
+.hr svg{width:38px;height:38px;margin:6px auto}
+.hr .tp{font-size:17px;font-weight:600}
+.hr .p{font-size:11px;color:var(--rain);height:14px;margin-top:3px;font-weight:600}
+.hr .w{font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:2px;margin-top:2px}
+.hr .w svg{width:11px;height:11px;margin:0}
+.daysep{flex:none;width:1px;background:var(--line);margin:8px 2px;position:relative}
+canvas.chart{width:100%;height:210px;display:block;margin-top:14px}
+
+/* Daily */
+.day{display:grid;grid-template-columns:96px 42px 74px 1fr 64px;align-items:center;gap:12px;padding:10px 4px;border-top:1px solid rgba(255,255,255,.07)}
+.day:first-of-type{border-top:0}
+.day .dn{font-weight:600;font-size:15px}
+.day .dd{font-size:12px;color:var(--muted)}
+.day svg{width:38px;height:38px}
+.day .pr{font-size:13px;color:var(--rain);font-weight:600}
+.day .pr small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+.range{display:flex;align-items:center;gap:10px;font-size:15px}
+.range .lo{color:var(--muted);width:36px;text-align:right}
+.range .hi{width:36px;font-weight:600}
+.track{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.1);position:relative}
+.track i{position:absolute;top:0;bottom:0;border-radius:4px}
+.day .wd{font-size:12px;color:var(--muted);text-align:right}
+@media(max-width:600px){.day{grid-template-columns:70px 36px 1fr 52px}.day .wd{display:none}.day .pr small{display:none}}
+
+/* Radar */
+#map{height:520px;border-radius:16px;overflow:hidden;background:#0d1117}
+.leaflet-container{font-family:Inter,sans-serif;background:#0d1117}
+.rctl{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+.play{width:44px;height:44px;border-radius:50%;border:0;background:var(--accent);color:#0b1d3a;cursor:pointer;display:grid;place-items:center;flex:none}
+.rctl input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+.rtime{font-variant-numeric:tabular-nums;font-weight:600;min-width:120px}
+.legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.legend .lg{width:140px;height:8px;border-radius:4px;background:linear-gradient(90deg,#88ddee,#0099cc,#0077aa,#005588,#ffee00,#ffaa00,#ff4400,#c10000,#ffaaff)}
+.pulse{width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 0 0 0 rgba(124,196,255,.7);animation:pl 2s infinite}
+@keyframes pl{70%{box-shadow:0 0 0 16px rgba(124,196,255,0)}100%{box-shadow:0 0 0 0 rgba(124,196,255,0)}}
+
+.metctl{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.metctl select{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(15,25,45,.8);color:var(--text);font:inherit;font-size:13px}
+.metimg{border-radius:16px;overflow:hidden;background:#0d1117;min-height:260px;display:grid;place-items:center}
+.metimg img{width:100%;display:block}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.src{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.12);margin-left:6px;vertical-align:middle}
+/* Favoritter */
+.favs{display:flex;gap:8px;overflow-x:auto;margin:-6px 0 16px;padding-bottom:4px;scrollbar-width:none}
+.favs::-webkit-scrollbar{display:none}
+.fav{flex:none;display:flex;align-items:center;gap:7px;padding:6px 8px 6px 10px;border-radius:12px;border:1px solid var(--line);
+  background:var(--glass);color:var(--text);font:inherit;font-size:14px;font-weight:500;cursor:pointer;backdrop-filter:blur(14px)}
+.fav:hover{background:var(--glass2)}.fav.on{border-color:var(--accent)}
+.fav .fi svg{width:24px;height:24px;display:block}.fav .ft{font-weight:700}
+.fav .fx{opacity:.4;padding:0 4px;font-size:16px;line-height:1}.fav .fx:hover{opacity:1}
+.favhint{font-size:13px;color:var(--muted);padding:4px 2px}
+.star{background:none;border:0;color:var(--muted);font-size:24px;cursor:pointer;margin-left:6px;vertical-align:middle;line-height:1}
+.star.on{color:#FFC93C}.star:hover{color:#FFC93C}
+/* Farevarsler */
+#alerts{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+#alerts:empty{display:none}
+.alert{border-radius:16px;border:1px solid;backdrop-filter:blur(14px);overflow:hidden}
+.alert.yellow{background:rgba(255,205,40,.16);border-color:rgba(255,205,40,.55)}
+.alert.orange{background:rgba(255,140,30,.18);border-color:rgba(255,140,30,.6)}
+.alert.red{background:rgba(240,50,50,.2);border-color:rgba(240,50,50,.65)}
+.alert summary{cursor:pointer;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;list-style:none;font-size:15px}
+.alert summary::-webkit-details-marker{display:none}
+.adot{width:22px;height:20px;flex:none;clip-path:polygon(50% 0,100% 100%,0 100%);background:#FFCD28}
+.orange .adot{background:#FF8C1E}.red .adot{background:#F03232}
+.aarea{color:var(--muted)}.atime{margin-left:auto;font-size:13px;color:var(--muted)}
+.abody{padding:0 16px 14px 48px;font-size:14px;line-height:1.55}.abody p{margin-top:6px}
+/* Ekstra kort */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.grid3{grid-template-columns:1fr}}
+.aqtop{display:flex;align-items:center;gap:14px}
+.aqnum{font-size:44px;font-weight:700;letter-spacing:-.03em}
+.aqlab{font-weight:600;font-size:16px}
+.aqgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+.aqgrid div{background:rgba(255,255,255,.05);border-radius:12px;padding:8px;text-align:center}
+.aqgrid span{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.aqgrid b{font-size:18px}.aqgrid small{display:block;font-size:10px;color:var(--muted)}
+.spark{display:flex;align-items:flex-end;gap:2px;height:36px}
+.spark i{flex:1;border-radius:2px;min-height:2px;opacity:.85}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kv div{background:rgba(255,255,255,.05);border-radius:12px;padding:10px 12px}
+.kv span{display:block;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.kv b{font-size:20px;display:flex;align-items:center;gap:6px}.kv b small{font-size:12px;color:var(--muted);font-weight:500}
+.kv .arrow{width:18px;height:18px}
+.tides{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.tide{display:flex;justify-content:space-between;align-items:center;font-size:14px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
+.tide b{font-weight:600}.tide .tl{color:var(--muted);font-size:12px}
+.s{font-size:13px;color:var(--muted);line-height:1.5}.s a,.card a{color:var(--accent)}
+.frostf{display:flex;gap:8px;margin-top:12px}
+.frostf input,.setf input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.15);color:var(--text);font:inherit;font-size:14px}
+.obsbig{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}.obsbig b{font-size:44px;font-weight:300;letter-spacing:-.03em}
+.diff{font-size:12px;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.1)}
+/* Dagsdetaljer */
+.day{cursor:pointer;border-radius:12px;transition:background .15s}.day:hover{background:rgba(255,255,255,.06)}
+.modal{position:fixed;inset:0;background:rgba(5,10,20,.55);backdrop-filter:blur(6px);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.open{display:flex}
+.mbox{width:min(640px,100%);max-height:88vh;overflow:auto;padding:22px 24px;position:relative;background:rgba(20,32,55,.92)}
+.mclose{position:absolute;top:14px;right:16px;background:none;border:0;color:var(--text);font-size:26px;cursor:pointer;opacity:.6}
+.mhead{display:flex;align-items:center;gap:14px;margin-bottom:10px}.mhead svg{width:64px;height:64px}
+.mhead h3{font-size:22px;letter-spacing:-.02em}.mtemp{margin-left:auto;font-size:26px;font-weight:600;padding-right:30px}
+.mtemp small{color:var(--muted);font-weight:400}
+.mstats{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:14px}
+.mt{width:100%;border-collapse:collapse;font-size:14px}
+.mt td{padding:6px 6px;border-top:1px solid rgba(255,255,255,.07);vertical-align:middle}
+.mt svg{width:32px;height:32px;display:block}
+.mt .w{display:flex;align-items:center;gap:4px;color:var(--muted)}.mt .w svg{width:14px;height:14px}
+.mt .pc{color:var(--rain);font-weight:600}
+.setrow{margin:14px 0}.setrow label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.setf{display:flex;gap:8px}
+/* Vind på kart */
+.windcv{position:absolute;inset:0;z-index:440;pointer-events:none}
+.btn.sm{padding:8px 12px;font-size:13px;border-radius:10px}.btn.on{background:var(--accent);color:#0b1d3a;border-color:transparent}
+/* Føre */
+.fore{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.fore{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.fore{grid-template-columns:1fr}}
+.fa{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 15px}
+.fah{display:flex;align-items:center;gap:8px;margin-bottom:8px}.fah b{font-size:16px}
+.fae{font-size:22px}.fah .fbadge{margin-left:auto}
+.fbadge{font-size:12px;font-weight:700;color:#10151f;padding:3px 9px;border-radius:999px;text-transform:none;letter-spacing:0;white-space:nowrap}
+.fat{font-size:14px;line-height:1.5}
+html.light .fa{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
+/* Lys modus */
+html.light{--glass:rgba(255,255,255,.55);--glass2:rgba(255,255,255,.78);--line:rgba(15,27,45,.13);--text:#0f1b2d;--muted:rgba(15,27,45,.62);--accent:#1f6fd1;--rain:#1a6fd6}
+html.light .tile,html.light .hr,html.light .aqgrid div,html.light .kv div,html.light .tide{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
+html.light .hr.cur{background:rgba(31,111,209,.14);border-color:rgba(31,111,209,.35)}
+html.light .results{background:rgba(255,255,255,.97)}
+html.light .metctl select{background:rgba(255,255,255,.85)}
+html.light .track{background:rgba(15,27,45,.1)}
+html.light .day{border-color:rgba(15,27,45,.08)}html.light .day:hover{background:rgba(255,255,255,.4)}
+html.light .seg{background:rgba(15,27,45,.07)}html.light .seg button.on{background:rgba(255,255,255,.95)}
+html.light .play,html.light .btn.on{color:#fff}
+html.light .mbox{background:rgba(245,248,252,.97)}html.light .mt td{border-color:rgba(15,27,45,.08)}
+html.light .frostf input,html.light .setf input{background:rgba(255,255,255,.7)}
+html.light .hr svg,html.light .day svg,html.light .mt svg,html.light .fav svg,html.light .mhead svg,html.light .now .ico{filter:drop-shadow(0 1px 2px rgba(15,27,45,.45))}
+html.light .diff{background:rgba(15,27,45,.08)}
+footer{margin-top:26px;color:var(--muted);font-size:12px;line-height:1.7;text-align:center}
+footer a{color:var(--accent);text-decoration:none}
+.loading{opacity:.5;transition:opacity .3s}
+.err{background:rgba(242,80,58,.15);border:1px solid rgba(242,80,58,.4);padding:12px 16px;border-radius:14px;margin-bottom:16px;display:none}
+.seg{display:flex;background:rgba(255,255,255,.06);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:none;color:var(--muted);font:inherit;font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;cursor:pointer;text-transform:none;letter-spacing:0}
+.seg button.on{background:rgba(255,255,255,.14);color:var(--text)}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 64 64"><circle cx="26" cy="26" r="11" fill="#FFC93C"/><path d="M22 50h24a10 10 0 0 0 0-20 13 13 0 0 0-25-2.5A11 11 0 0 0 22 50z" fill="#fff"/></svg>
+      Været <span>live</span>
+    </div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="q" placeholder="Søk etter sted …" autocomplete="off">
+      <div class="results" id="res"></div>
+    </div>
+    <button class="btn" id="geo" title="Bruk min posisjon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+      Min posisjon
+    </button>
+    <button class="btn" id="setBtn" title="Innstillinger" aria-label="Innstillinger">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="favs" id="favs"></div>
+  <div id="alerts"></div>
+  <div class="err" id="err"></div>
+
+  <div class="grid" id="main">
+    <div class="card hero">
+      <div>
+        <div class="place" id="place">Laster …</div>
+        <div class="sub" id="sub"></div>
+        <div class="now">
+          <div class="ico" id="nowIco"></div>
+          <div>
+            <div class="temp" id="nowT">–</div>
+          </div>
+        </div>
+        <div class="desc" id="nowD"></div>
+        <div class="hl" id="nowHL"></div>
+      </div>
+      <div class="nowcast" id="nc">
+        <div class="txt" id="ncTxt"></div>
+        <div class="ncbars" id="ncBars"></div>
+        <div class="nclab" id="ncLab"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="details" id="details"></div>
+    </div>
+  </div>
+
+  <section class="card pad" id="foreCard">
+    <div class="h"><span>Føre nå · gå, løpe, sykle, kjøre</span><span id="foreSum"></span></div>
+    <div class="fore" id="fore"><div class="s">Vurderer føret …</div></div>
+    <div class="note" id="foreNote"></div>
+  </section>
+
+  <section class="card pad">
+    <div class="h"><span>Time for time · neste 48 timer</span>
+      <div class="seg" id="chartSeg"><button data-m="temp" class="on">Temperatur</button><button data-m="wind">Vind</button></div>
+    </div>
+    <div class="hours" id="hours"></div>
+    <canvas class="chart" id="chart"></canvas>
+  </section>
+
+  <section class="grid" style="grid-template-columns:1fr 1.25fr">
+    <div class="card pad">
+      <div class="h"><span>10 dagers varsel</span></div>
+      <div id="days"></div>
+    </div>
+    <div class="card pad">
+      <div class="h"><span>Nedbørsradar</span>
+        <div class="seg" id="radSeg"><button data-r="met" class="on">MET-radar</button><button data-r="rv">Zoombart kart</button></div>
+      </div>
+      <div id="metRad">
+        <div class="metctl">
+          <select id="area">
+            <option value="norway">Hele Norge</option><option value="nordic">Norden</option>
+            <option value="southeastern_norway">Sørøst-Norge</option><option value="eastern_norway">Østlandet</option>
+            <option value="southern_norway">Sørlandet</option><option value="southwestern_norway">Sørvestlandet</option>
+            <option value="western_norway">Vestlandet</option><option value="northwestern_norway">Nordvestlandet</option>
+            <option value="central_norway">Trøndelag</option><option value="southern_nordland">Sør-Nordland</option>
+            <option value="nordland">Nordland</option><option value="northern_nordland">Nord-Nordland</option>
+            <option value="troms">Troms</option><option value="finnmark">Finnmark</option>
+          </select>
+          <select id="rtype">
+            <option value="5level_reflectivity">Nedbør (5 nivåer)</option>
+            <option value="reflectivity">Reflektivitet (detaljert)</option>
+            <option value="lx_reflectivity">Reflektivitet (lav høyde)</option>
+          </select>
+        </div>
+        <div class="metimg"><img id="metImg" alt="Animert nedbørsradar fra Meteorologisk institutt"></div>
+        <div class="note">Animert radar direkte fra Meteorologisk institutt · siste timen · oppdateres hvert 5. minutt</div>
+      </div>
+      <div id="rvRad" style="display:none">
+        <div id="map"></div>
+        <div class="note" id="rvNote"></div>
+        <div class="rctl">
+          <button class="play" id="play" aria-label="Spill av"></button>
+          <input type="range" id="slider" min="0" max="0" value="0">
+          <div class="rtime" id="rtime">–</div>
+          <button class="btn sm" id="windBtn" title="Vis vindstrømmer">〰 Vind</button>
+          <span class="legend">Svak <span class="lg"></span> Kraftig</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid3">
+    <div class="card pad" id="airCard">
+      <div class="h"><span>Luftkvalitet</span></div>
+      <div id="air"><div class="s">Laster …</div></div>
+    </div>
+    <div class="card pad" id="seaCard">
+      <div class="h"><span>Hav og tidevann</span></div>
+      <div id="sea"><div class="s">Laster …</div></div>
+      <div id="tide"></div>
+    </div>
+    <div class="card pad" id="obsCard">
+      <div class="h"><span>Målt nå · nærmeste værstasjon</span></div>
+      <div id="obs"><div class="s">Laster …</div></div>
+    </div>
+  </section>
+
+  <footer>
+    Værdata fra <a href="https://www.met.no/" target="_blank">Meteorologisk institutt</a> (<a href="https://api.met.no/" target="_blank">api.met.no</a>, lisens CC BY 4.0) ·
+    Reserve: <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a> ·
+    Zoombar radar: <a href="https://www.rainviewer.com/" target="_blank">RainViewer</a> ·
+    Tidevann: <a href="https://kartverket.no/til-sjos/se-havniva" target="_blank">Kartverket</a> ·
+    Målinger: <a href="https://frost.met.no/" target="_blank">MET Frost</a> ·
+    Kart: © <a href="https://www.esri.com/" target="_blank">Esri</a>, © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a><br>
+    <span id="upd"></span>
+  </footer>
+</div>
+
+<div class="modal" id="modal"><div class="card mbox"><button class="mclose" id="mclose" aria-label="Lukk">×</button><div id="mbody"></div></div></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const DEFAULT = {name:"Oslo", sub:"Oslo, Norge", lat:59.9139, lon:10.7522, tz:"Europe/Oslo"};
+let loc = DEFAULT, wx = null, chartMode = "temp";
+
+try { const s = JSON.parse(localStorage.getItem("vaer-loc")); if (s && s.lat) loc = s; } catch(e){}
+
+/* ---------- Weather codes ---------- */
+const DESC = {0:"Klart",1:"Stort sett klart",2:"Delvis skyet",3:"Overskyet",45:"Tåke",48:"Rimtåke",
+ 51:"Lett yr",53:"Yr",55:"Kraftig yr",56:"Underkjølt yr",57:"Underkjølt yr",61:"Lett regn",63:"Regn",65:"Kraftig regn",
+ 66:"Underkjølt regn",67:"Kraftig underkjølt regn",71:"Lett snø",73:"Snø",75:"Kraftig snø",77:"Snøkorn",
+ 80:"Lette regnbyger",81:"Regnbyger",82:"Kraftige regnbyger",85:"Snøbyger",86:"Kraftige snøbyger",
+ 95:"Tordenvær",96:"Torden med hagl",99:"Kraftig torden med hagl",
+ 1001:"Sludd",1002:"Lett sludd",1003:"Kraftig sludd",1004:"Sluddbyger",1005:"Lette sluddbyger",1006:"Kraftige sluddbyger",1007:"Lette snøbyger"};
+function cat(c){
+  if (c>=1001&&c<=1006) return "sleet"; if (c===1007) return "snowshowers";
+  if (c===0) return "clear"; if (c===1||c===2) return "partly"; if (c===3) return "cloudy";
+  if (c===45||c===48) return "fog"; if (c>=51&&c<=67) return c>=63&&c!==66&&c<=65?"rain":"drizzle";
+  if (c>=71&&c<=77) return "snow"; if (c>=80&&c<=82) return "showers"; if (c===85||c===86) return "snowshowers";
+  if (c>=95) return "thunder"; return "cloudy";
+}
+
+/* ---------- SVG icons ---------- */
+function sunG(cx,cy,r){
+  let rays=""; for(let i=0;i<8;i++){const a=i*Math.PI/4, r1=r+4, r2=r+9;
+    rays+=`<line x1="${cx+Math.cos(a)*r1}" y1="${cy+Math.sin(a)*r1}" x2="${cx+Math.cos(a)*r2}" y2="${cy+Math.sin(a)*r2}" stroke="#FFC93C" stroke-width="3" stroke-linecap="round"/>`;}
+  return `<g>${rays}<circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#sg)"/></g>`;
+}
+function moonG(cx,cy,r){
+  return `<path d="M${cx+r*.3} ${cy-r} a${r} ${r} 0 1 0 ${r*.75} ${r*1.55} a${r*.8} ${r*.8} 0 0 1 -${r*.75} -${r*1.55}z" fill="#E8EEF9" transform="rotate(-15 ${cx} ${cy})"/>`;
+}
+const CLOUD = (fill,dx=0,dy=0,s=1)=>`<path transform="translate(${dx} ${dy}) scale(${s})" d="M19 48h28a11 11 0 0 0 1-22 15 15 0 0 0-28.5-3.5A12.5 12.5 0 0 0 19 48z" fill="${fill}"/>`;
+function icon(code, day=1){
+  const c = cat(code);
+  const defs = `<defs><radialGradient id="sg"><stop offset="0" stop-color="#FFE27A"/><stop offset="1" stop-color="#FFB627"/></radialGradient></defs>`;
+  const orb = day ? sunG : moonG;
+  let g = "";
+  const drops = (col, n=3, y=50) => { let s=""; for(let i=0;i<n;i++){const x=22+i*9; s+=`<line x1="${x}" y1="${y}" x2="${x-3}" y2="${y+9}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;} return s; };
+  const flakes = (n=3,y=54) => { let s=""; for(let i=0;i<n;i++){const x=22+i*9; s+=`<circle cx="${x}" cy="${y+(i%2)*4}" r="2.6" fill="#fff"/>`;} return s; };
+  switch(c){
+    case "clear": g = day ? sunG(32,32,13) : moonG(30,32,15); break;
+    case "partly": g = (day?sunG(24,22,9):moonG(23,22,10)) + CLOUD("#F3F6FB",4,8,.92); break;
+    case "cloudy": g = CLOUD("#AEB9CC",-6,-4,.8) + CLOUD("#E6EBF3",4,6,.9); break;
+    case "fog": g = CLOUD("#C9D2E0",0,-6,.9) + [44,50,56].map((y,i)=>`<line x1="${12+i*3}" y1="${y}" x2="${52-i*3}" y2="${y}" stroke="#C9D2E0" stroke-width="3" stroke-linecap="round"/>`).join(""); break;
+    case "drizzle": g = CLOUD("#D5DCE8",0,-8) + drops("#7CC4FF",3,46); break;
+    case "rain": g = CLOUD("#9AA7BD",0,-8) + drops("#4AA3FF",4,46); break;
+    case "showers": g = (day?sunG(22,18,8):moonG(21,18,9)) + CLOUD("#C5CEDC",2,-2,.92) + drops("#4AA3FF",3,50); break;
+    case "snow": g = CLOUD("#D5DCE8",0,-8) + flakes(4,48); break;
+    case "snowshowers": g = (day?sunG(22,18,8):moonG(21,18,9)) + CLOUD("#D5DCE8",2,-2,.92) + flakes(3,52); break;
+    case "sleet": g = CLOUD("#AEB9CC",0,-8) + drops("#7CC4FF",2,46) + `<circle cx="40" cy="54" r="2.6" fill="#fff"/><circle cx="31" cy="58" r="2.6" fill="#fff"/>`; break;
+    case "thunder": g = CLOUD("#6F7B93",0,-8) + `<path d="M34 40l-8 12h7l-4 10 11-14h-7l5-8z" fill="#FFC93C"/>`; break;
+  }
+  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${defs}${g}</svg>`;
+}
+const ARROW = deg => `<svg class="arrow" viewBox="0 0 24 24" style="transform:rotate(${deg+180}deg)"><path d="M12 3l5 16-5-3.5L7 19z" fill="currentColor"/></svg>`;
+const SARROW = deg => `<svg viewBox="0 0 24 24" style="transform:rotate(${deg+180}deg)"><path d="M12 3l5 16-5-3.5L7 19z" fill="currentColor"/></svg>`;
+const DIRS = ["N","NNØ","NØ","ØNØ","Ø","ØSØ","SØ","SSØ","S","SSV","SV","VSV","V","VNV","NV","NNV"];
+const dirName = d => DIRS[Math.round(d/22.5)%16];
+const DIRFULL = {N:"nord",S:"sør",Ø:"øst",V:"vest",NØ:"nordøst",SØ:"sørøst",SV:"sørvest",NV:"nordvest"};
+function windWord(ms){ if(ms<0.3)return"Stille"; if(ms<1.6)return"Flau vind"; if(ms<3.4)return"Svak vind"; if(ms<5.5)return"Lett bris";
+  if(ms<8)return"Laber bris"; if(ms<10.8)return"Frisk bris"; if(ms<13.9)return"Liten kuling"; if(ms<17.2)return"Stiv kuling";
+  if(ms<20.8)return"Sterk kuling"; if(ms<24.5)return"Liten storm"; if(ms<28.5)return"Full storm"; if(ms<32.7)return"Sterk storm"; return"Orkan"; }
+const r0 = v => v==null ? "–" : Math.round(v);
+const r1 = v => v==null ? "–" : (Math.round(v*10)/10).toString().replace(".",",");
+const hhmm = t => t ? t.slice(11,16) : "–";
+
+/* ---------- Data ---------- */
+const VARS = {
+  current:"temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m",
+  hourly:"temperature_2m,apparent_temperature,precipitation,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day,uv_index",
+  daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset,uv_index_max,daylight_duration",
+  minutely_15:"precipitation"
+};
+function url(models){
+  const p = new URLSearchParams({latitude:loc.lat, longitude:loc.lon, timezone:"auto", forecast_days:10,
+    wind_speed_unit:"ms", forecast_minutely_15:12, ...VARS});
+  if (models) p.set("models", models);
+  return "https://api.open-meteo.com/v1/forecast?" + p.toString();
+}
+// Merge multi-model response: prefer MET Nordic (metno_seamless), fall back to best_match per value
+function merge(d){
+  const out = {};
+  for (const sec of ["current","hourly","daily","minutely_15"]){
+    const s = d[sec]; if (!s) continue;
+    const o = {time: s.time};
+    const names = new Set(Object.keys(s).filter(k=>k!=="time"&&k!=="interval").map(k=>k.replace(/_(metno_seamless|best_match)$/,"")));
+    for (const n of names){
+      const a = s[n+"_metno_seamless"], b = s[n+"_best_match"] ?? s[n];
+      if (Array.isArray(a) || Array.isArray(b)){
+        const len = Math.max(a?a.length:0, b?b.length:0);
+        o[n] = Array.from({length:len}, (_,i)=> (a && a[i]!=null) ? a[i] : (b ? b[i] ?? null : null));
+      } else o[n] = (a!=null) ? a : b;
+    }
+    out[sec] = o;
+  }
+  out.utc_offset_seconds = d.utc_offset_seconds; out.timezone = d.timezone;
+  return out;
+}
+/* ---------- MET Norway (api.met.no) ---------- */
+function localStr(date, tz){
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(date).map(x=>[x.type,x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+function tzOffset(tz, now){
+  const m = Math.round((Date.parse(localStr(now,tz)+":00Z") - now.getTime())/900000)*15;
+  const a = Math.abs(m); return (m<0?"-":"+") + String(Math.floor(a/60)).padStart(2,"0") + ":" + String(a%60).padStart(2,"0");
+}
+const SYM = {clearsky:0,fair:1,partlycloudy:2,cloudy:3,fog:45,lightrain:61,rain:63,heavyrain:65,
+  lightrainshowers:80,rainshowers:81,heavyrainshowers:82,lightsleet:1002,sleet:1001,heavysleet:1003,
+  lightsleetshowers:1005,sleetshowers:1004,heavysleetshowers:1006,lightsnow:71,snow:73,heavysnow:75,
+  lightsnowshowers:1007,snowshowers:85,heavysnowshowers:86};
+function sym(s){
+  if (!s) return {code:3, day:1};
+  const m = s.match(/^(.*?)(?:_(day|night|polartwilight))?$/), base = m[1];
+  return {code: base.includes("thunder") ? 95 : (SYM[base] ?? 3), day: m[2]==="night" ? 0 : 1};
+}
+function feels(t, v){ // vindavkjøling (m/s inn), ellers målt temp
+  if (t==null) return null;
+  if (t<=10 && v!=null && v>1.34){ const k=Math.pow(v*3.6,0.16); return 13.12+0.6215*t-11.37*k+0.3965*t*k; }
+  return t;
+}
+const getJSON = u => fetch(u).then(r => { if(!r.ok) throw new Error(r.status); return r.json(); });
+async function loadMET(){
+  const tz = loc.tz || "Europe/Oslo", now = new Date();
+  const la = (+loc.lat).toFixed(4), lo = (+loc.lon).toFixed(4), B = "https://api.met.no/weatherapi";
+  const today = localStr(now,tz).slice(0,10);
+  const [lf, nc, sun] = await Promise.allSettled([
+    getJSON(`${B}/locationforecast/2.0/complete?lat=${la}&lon=${lo}`),
+    getJSON(`${B}/nowcast/2.0/complete?lat=${la}&lon=${lo}`),
+    getJSON(`${B}/sunrise/3.0/sun?lat=${la}&lon=${lo}&date=${today}&offset=${encodeURIComponent(tzOffset(tz,now))}`)
+  ]);
+  if (lf.status !== "fulfilled") throw new Error("MET locationforecast: " + lf.reason);
+  const ts = lf.value.properties.timeseries;
+
+  // Time for time
+  const H = {time:[],temperature_2m:[],apparent_temperature:[],precipitation:[],precipitation_probability:[],weather_code:[],
+    is_day:[],wind_speed_10m:[],wind_gusts_10m:[],wind_direction_10m:[],uv_index:[]};
+  for (const e of ts){
+    const n1 = e.data.next_1_hours; if (!n1) continue;
+    const d = e.data.instant.details, s = sym(n1.summary.symbol_code);
+    H.time.push(localStr(new Date(e.time),tz)); H.temperature_2m.push(d.air_temperature);
+    H.apparent_temperature.push(feels(d.air_temperature,d.wind_speed));
+    H.precipitation.push(n1.details.precipitation_amount ?? 0); H.precipitation_probability.push(n1.details.probability_of_precipitation ?? null);
+    H.weather_code.push(s.code); H.is_day.push(s.day);
+    H.wind_speed_10m.push(d.wind_speed); H.wind_gusts_10m.push(d.wind_speed_of_gust ?? d.wind_speed);
+    H.wind_direction_10m.push(d.wind_from_direction); H.uv_index.push(d.ultraviolet_index_clear_sky ?? null);
+  }
+
+  // Dag for dag
+  const days = new Map();
+  for (const e of ts){
+    const ls = localStr(new Date(e.time),tz), key = ls.slice(0,10), hr = +ls.slice(11,13);
+    if (!days.has(key)) days.set(key,{t:[],pr:0,prob:[],wind:[],uv:[],sym:null,score:99});
+    const D = days.get(key), d = e.data.instant.details, n1 = e.data.next_1_hours, n6 = e.data.next_6_hours;
+    D.t.push(d.air_temperature);
+    if (n1){ D.pr += n1.details.precipitation_amount||0; D.prob.push(n1.details.probability_of_precipitation); }
+    else if (n6){ D.pr += n6.details.precipitation_amount||0; D.t.push(n6.details.air_temperature_max, n6.details.air_temperature_min); D.prob.push(n6.details.probability_of_precipitation); }
+    D.wind.push([d.wind_speed, d.wind_from_direction]); D.uv.push(d.ultraviolet_index_clear_sky);
+    if (n6 && Math.abs(hr-9) < D.score){ D.score = Math.abs(hr-9); D.sym = n6.summary.symbol_code; }
+    else if (!D.sym && n1) D.sym = n1.summary.symbol_code;
+  }
+  const Dd = {time:[],weather_code:[],temperature_2m_max:[],temperature_2m_min:[],precipitation_sum:[],precipitation_probability_max:[],
+    wind_speed_10m_max:[],wind_direction_10m_dominant:[],uv_index_max:[],sunrise:[],sunset:[],daylight_duration:[]};
+  for (const [k,D] of days){
+    const t = D.t.filter(v=>v!=null); if (t.length<2 && Dd.time.length) continue;
+    const pb = D.prob.filter(v=>v!=null), uv = D.uv.filter(v=>v!=null);
+    const w = D.wind.reduce((a,b)=> (b[0]??0)>(a[0]??0)?b:a, [0,0]);
+    Dd.time.push(k); Dd.weather_code.push(sym(D.sym).code);
+    Dd.temperature_2m_max.push(Math.max(...t)); Dd.temperature_2m_min.push(Math.min(...t));
+    Dd.precipitation_sum.push(D.pr); Dd.precipitation_probability_max.push(pb.length?Math.max(...pb):null);
+    Dd.wind_speed_10m_max.push(w[0]); Dd.wind_direction_10m_dominant.push(w[1]);
+    Dd.uv_index_max.push(uv.length?Math.max(...uv):null);
+    Dd.sunrise.push(null); Dd.sunset.push(null); Dd.daylight_duration.push(null);
+  }
+  if (sun.status==="fulfilled"){
+    const p = sun.value.properties, sr = p.sunrise && p.sunrise.time, ss = p.sunset && p.sunset.time;
+    if (sr) Dd.sunrise[0] = today+"T"+sr.slice(11,16);
+    if (ss) Dd.sunset[0] = today+"T"+ss.slice(11,16);
+    if (sr && ss) Dd.daylight_duration[0] = (Date.parse(ss)-Date.parse(sr))/1000;
+  }
+
+  // Nå: locationforecast, overstyrt av nowcast (observasjonsbasert) der det finnes
+  const f0 = ts[0].data, d0 = f0.instant.details, s0 = sym((f0.next_1_hours||f0.next_6_hours||{summary:{}}).summary.symbol_code);
+  const C = {time: localStr(now,tz), temperature_2m:d0.air_temperature, relative_humidity_2m:d0.relative_humidity,
+    dew_point_2m:d0.dew_point_temperature, pressure_msl:d0.air_pressure_at_sea_level, cloud_cover:d0.cloud_area_fraction,
+    wind_speed_10m:d0.wind_speed, wind_direction_10m:d0.wind_from_direction, wind_gusts_10m:d0.wind_speed_of_gust ?? d0.wind_speed,
+    weather_code:s0.code, is_day:s0.day, precipitation:f0.next_1_hours ? f0.next_1_hours.details.precipitation_amount : 0};
+  let M = null, nowcastOK = false;
+  if (nc.status==="fulfilled"){
+    const P = nc.value.properties, nts = P.timeseries || [];
+    if (nts.length){
+      const n = nts[0].data, i = n.instant.details;
+      if (i.air_temperature!=null) C.temperature_2m = i.air_temperature;
+      if (i.relative_humidity!=null) C.relative_humidity_2m = i.relative_humidity;
+      if (i.wind_speed!=null) C.wind_speed_10m = i.wind_speed;
+      if (i.wind_speed_of_gust!=null) C.wind_gusts_10m = i.wind_speed_of_gust;
+      if (i.wind_from_direction!=null) C.wind_direction_10m = i.wind_from_direction;
+      if (n.next_1_hours && n.next_1_hours.summary){ const s = sym(n.next_1_hours.summary.symbol_code); C.weather_code=s.code; C.is_day=s.day; }
+      nowcastOK = true;
+    }
+    if (P.meta && P.meta.radar_coverage === "ok"){
+      const pts = nts.filter(e => Date.parse(e.time) >= now.getTime()-5*60000);
+      M = {time:[], precipitation:[]};
+      for (let k=0; k+2<pts.length && M.time.length<8; k+=3){
+        const mm = [0,1,2].reduce((a,j)=> a + (pts[k+j].data.instant.details.precipitation_rate||0)*5/60, 0);
+        M.time.push(localStr(new Date(pts[k].time),tz)); M.precipitation.push(mm);
+      }
+    }
+  }
+  C.apparent_temperature = feels(C.temperature_2m, C.wind_speed_10m);
+  // Alle tidssteg (1 t og 6 t) til dagsdetaljer
+  const steps = [];
+  for (const e of ts){
+    const n1 = e.data.next_1_hours, n6 = e.data.next_6_hours, nx = n1 || n6; if (!nx) continue;
+    const d = e.data.instant.details, s = sym(nx.summary.symbol_code);
+    steps.push({time:localStr(new Date(e.time),tz), hours:n1?1:6, code:s.code, day:s.day, temp:d.air_temperature,
+      tmax:n1?null:n6.details.air_temperature_max, tmin:n1?null:n6.details.air_temperature_min,
+      precip:nx.details.precipitation_amount ?? 0, prob:nx.details.probability_of_precipitation ?? null,
+      wind:d.wind_speed, gust:d.wind_speed_of_gust ?? null, dir:d.wind_from_direction});
+  }
+  return {current:C, hourly:H, daily:Dd, minutely_15:M, steps, source: nowcastOK ? "MET · nowcast" : "MET"};
+}
+
+async function load(){
+  $("main").classList.add("loading");
+  showErr("");
+  try{
+    let d;
+    try { d = await loadMET(); }
+    catch(metErr){
+      console.warn("MET feilet, bruker Open-Meteo", metErr);
+      try { const r = await fetch(url("metno_seamless,best_match")); if(!r.ok) throw 0; d = merge(await r.json()); }
+      catch(e){ const r = await fetch(url(null)); if(!r.ok) throw new Error("Kunne ikke hente værdata ("+r.status+")"); d = merge(await r.json()); }
+      d.source = "Open-Meteo (reserve)";
+      const h = d.hourly;
+      d.steps = h.time.map((t,i)=>({time:t,hours:1,code:h.weather_code[i],day:h.is_day[i],temp:h.temperature_2m[i],
+        precip:h.precipitation[i]||0,prob:h.precipitation_probability?h.precipitation_probability[i]:null,
+        wind:h.wind_speed_10m[i],gust:h.wind_gusts_10m[i],dir:h.wind_direction_10m[i]}));
+    }
+    wx = d; render();
+    $("upd").innerHTML = "Kilde: <b>" + d.source + "</b> · oppdatert " + new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"}) + " · oppdateres automatisk hvert 10. minutt";
+    $("place").innerHTML = esc(loc.name) + `<button class="star" id="star">☆</button><span class="src">${d.source.startsWith("MET")?"MET":"OPEN-METEO"}</span>`;
+    updateStar();
+    loadExtras();
+  }catch(e){ showErr("Fikk ikke hentet værdata. Sjekk nettforbindelsen og prøv igjen. " + (e.message||"")); }
+  $("main").classList.remove("loading");
+}
+function showErr(m){ $("err").style.display = m?"block":"none"; $("err").textContent = m; }
+
+/* ---------- Render ---------- */
+function render(){
+  const c = wx.current, h = wx.hourly, d = wx.daily;
+  $("place").textContent = loc.name;
+  const localNow = c.time;
+  const dt = new Date(localNow);
+  $("sub").textContent = (loc.sub||"") + " · " + dt.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"}) + " kl. " + hhmm(localNow);
+  $("nowIco").innerHTML = icon(c.weather_code, c.is_day);
+  $("nowT").innerHTML = r0(c.temperature_2m) + "<sup>°</sup>";
+  $("nowD").textContent = DESC[c.weather_code] || "";
+  $("nowHL").textContent = `Høy ${r0(d.temperature_2m_max[0])}° · Lav ${r0(d.temperature_2m_min[0])}° · Føles som ${r0(c.apparent_temperature)}°`;
+  document.title = `${r0(c.temperature_2m)}° ${loc.name} – Været`;
+  setTheme(c.weather_code, c.is_day);
+
+  // Nowcast (15-min)
+  const m = wx.minutely_15;
+  if (m && m.precipitation){
+    let start = m.time.findIndex(t => t >= localNow.slice(0,16)); if (start<0) start=0;
+    let idx = m.time.map((t,i)=>i).filter(i=>i>=Math.max(0,start-1)).slice(0,8);
+    const vals = idx.map(i=>m.precipitation[i]||0);
+    const max = Math.max(1, ...vals);
+    $("ncBars").innerHTML = vals.map(v=>`<div style="height:${Math.max(3, v/max*42)}px;opacity:${v>0?.95:.25}" title="${r1(v)} mm"></div>`).join("");
+    $("ncLab").innerHTML = `<span>${hhmm(m.time[idx[0]])}</span><span>${hhmm(m.time[idx[Math.floor(idx.length/2)]])}</span><span>${hhmm(m.time[idx[idx.length-1]])}</span>`;
+    const first = vals.findIndex(v=>v>=0.05), total = vals.reduce((a,b)=>a+b,0);
+    let txt;
+    if (first<0) txt = "☂︎ Ingen nedbør de neste 2 timene";
+    else if (first===0) { const stop = vals.findIndex(v=>v<0.05); txt = stop<0 ? `Nedbør de neste 2 timene, ca. ${r1(total)} mm` : `Nedbør nå, opphold fra ca. kl. ${hhmm(m.time[idx[stop]])}`; }
+    else txt = `Nedbør fra ca. kl. ${hhmm(m.time[idx[first]])}, ca. ${r1(total)} mm neste 2 timer`;
+    $("ncTxt").textContent = txt; $("nc").style.display="";
+  } else $("nc").style.display="none";
+
+  // Details
+  let hi = h.time.findIndex(t => t.slice(0,13) === localNow.slice(0,13)); if (hi<0) hi=0;
+  const uv = h.uv_index ? h.uv_index[hi] : d.uv_index_max[0];
+  const uvTxt = uv==null?"":uv<3?"Lav":uv<6?"Moderat":uv<8?"Høy":uv<11?"Svært høy":"Ekstrem";
+  const dl = d.daylight_duration ? d.daylight_duration[0] : null;
+  const dn = dirName(c.wind_direction_10m);
+  const tiles = [
+    ["Vind", `${ARROW(c.wind_direction_10m)} ${r1(c.wind_speed_10m)} <small>m/s</small>`, `${windWord(c.wind_speed_10m)} fra ${DIRFULL[dn]||dn}`],
+    ["Vindkast", `${r1(c.wind_gusts_10m)} <small>m/s</small>`, `Maks i dag ${r1(Math.max(...h.wind_gusts_10m.slice(hi, hi+24).filter(v=>v!=null)))} m/s`],
+    ["Føles som", `${r0(c.apparent_temperature)}°`, Math.abs(c.apparent_temperature-c.temperature_2m)<1.5?"Omtrent som målt":c.apparent_temperature<c.temperature_2m?"Kjøligere pga. vind":"Varmere pga. fukt"],
+    ["Nedbør i dag", `${r1(d.precipitation_sum[0])} <small>mm</small>`, d.precipitation_probability_max[0]!=null?`Sjanse ${r0(d.precipitation_probability_max[0])} %`:"&nbsp;"],
+    ["Luftfuktighet", `${r0(c.relative_humidity_2m)} <small>%</small>`, `Duggpunkt ${r0(c.dew_point_2m)}°`],
+    ["Lufttrykk", `${r0(c.pressure_msl)} <small>hPa</small>`, c.pressure_msl<1000?"Lavtrykk":c.pressure_msl>1020?"Høytrykk":"Normalt"],
+    ["Skydekke", `${r0(c.cloud_cover)} <small>%</small>`, DESC[c.weather_code]||""],
+    ["UV-indeks", `${uv==null?"–":r0(uv)} <small>${uvTxt}</small>`, `<div class="uvbar"><i style="left:${Math.min(100,(uv||0)/11*100)}%"></i></div>`],
+    ["Sol", `<span style="font-size:18px">↑ ${hhmm(d.sunrise[0])} &nbsp;↓ ${hhmm(d.sunset[0])}</span>`, dl?`Dagslys ${Math.floor(dl/3600)} t ${Math.round(dl%3600/60)} min`:""],
+  ];
+  $("details").innerHTML = tiles.map(([k,v,s])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+
+  // Hourly strip
+  let html = "";
+  for (let i=hi; i<Math.min(hi+48, h.time.length); i++){
+    const t = h.time[i];
+    if (i>hi && t.slice(11,13)==="00") html += `<div class="daysep"></div>`;
+    const p = h.precipitation[i], pp = h.precipitation_probability ? h.precipitation_probability[i] : null;
+    html += `<div class="hr ${i===hi?"cur":""}">
+      <div class="t">${i===hi?"Nå":t.slice(11,13)}</div>
+      ${icon(h.weather_code[i], h.is_day[i])}
+      <div class="tp">${r0(h.temperature_2m[i])}°</div>
+      <div class="p">${p>=0.1?r1(p)+" mm":(pp!=null&&pp>=20?pp+" %":"")}</div>
+      <div class="w">${SARROW(h.wind_direction_10m[i])}${r0(h.wind_speed_10m[i])}</div></div>`;
+  }
+  $("hours").innerHTML = html;
+  drawChart(hi);
+
+  // Daily
+  const lo = Math.min(...d.temperature_2m_min.filter(v=>v!=null)), up = Math.max(...d.temperature_2m_max.filter(v=>v!=null));
+  const span = Math.max(1, up-lo);
+  $("days").innerHTML = d.time.map((t,i)=>{
+    const date = new Date(t+"T12:00");
+    const name = i===0?"I dag":i===1?"I morgen":date.toLocaleDateString("nb-NO",{weekday:"long"});
+    const mn = d.temperature_2m_min[i], mx = d.temperature_2m_max[i];
+    if (mn==null||mx==null) return "";
+    const L = (mn-lo)/span*100, W = Math.max(4,(mx-mn)/span*100);
+    const pp = d.precipitation_probability_max[i];
+    return `<div class="day" data-i="${i}" title="Se time for time">
+      <div><div class="dn">${name[0].toUpperCase()+name.slice(1)}</div><div class="dd">${date.toLocaleDateString("nb-NO",{day:"numeric",month:"short"})}</div></div>
+      ${icon(d.weather_code[i],1)}
+      <div class="pr">${d.precipitation_sum[i]>=0.1?r1(d.precipitation_sum[i])+" mm":""}<small>${pp!=null&&pp>0?pp+" %":""}</small></div>
+      <div class="range"><span class="lo">${r0(mn)}°</span><div class="track"><i style="left:${L}%;width:${W}%;background:${tempGrad(mn,mx)}"></i></div><span class="hi">${r0(mx)}°</span></div>
+      <div class="wd">${r0(d.wind_speed_10m_max[i])} m/s ${dirName(d.wind_direction_10m_dominant[i]??0)}</div></div>`;
+  }).join("");
+
+  updateRadarCenter();
+}
+function tempColor(t){
+  const stops = [[-20,"#8f7bff"],[-10,"#5f8dff"],[0,"#5fc6ff"],[8,"#5fe0b8"],[15,"#c9e86a"],[22,"#ffc848"],[30,"#ff7a3d"],[38,"#e8364a"]];
+  for (let i=0;i<stops.length-1;i++) if (t<=stops[i+1][0]) return stops[i][1];
+  return stops[stops.length-1][1];
+}
+const tempGrad = (a,b) => `linear-gradient(90deg,${tempColor(a)},${tempColor(b)})`;
+
+/* ---------- Chart ---------- */
+function drawChart(hi){
+  const INK = isLight() ? "15,27,45" : "244,247,251";
+  const cv = $("chart"), dpr = window.devicePixelRatio||1;
+  const W = cv.clientWidth, H = cv.clientHeight; if (!W) return;
+  cv.width = W*dpr; cv.height = H*dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const h = wx.hourly, n = Math.min(48, h.time.length-hi);
+  const L=34, R=34, T=16, B=26, cw=W-L-R, ch=H-T-B;
+  const X = i => L + i/(n-1)*cw;
+  const series = chartMode==="temp" ? h.temperature_2m.slice(hi,hi+n) : h.wind_speed_10m.slice(hi,hi+n);
+  const gust = h.wind_gusts_10m.slice(hi,hi+n);
+  const prec = h.precipitation.slice(hi,hi+n);
+  let mn = Math.min(...series), mx = Math.max(...(chartMode==="wind"?gust:series));
+  if (chartMode==="wind") mn = 0;
+  const pad = Math.max(1,(mx-mn)*.15); mn = chartMode==="wind"?0:Math.floor(mn-pad); mx = Math.ceil(mx+pad);
+  const Y = v => T + (1-(v-mn)/(mx-mn))*ch;
+  // grid
+  g.font = "11px Inter"; g.fillStyle = "rgba("+INK+",.5)"; g.strokeStyle="rgba("+INK+",.07)"; g.lineWidth=1;
+  const steps = 4;
+  for (let s=0;s<=steps;s++){ const v = mn+(mx-mn)*s/steps, y=Y(v);
+    g.beginPath(); g.moveTo(L,y); g.lineTo(W-R,y); g.stroke();
+    g.textAlign="right"; g.fillText(Math.round(v)+(chartMode==="temp"?"°":""), L-6, y+4); }
+  // zero line
+  if (chartMode==="temp" && mn<0 && mx>0){ g.strokeStyle="rgba(124,196,255,.35)"; g.setLineDash([4,4]); g.beginPath(); g.moveTo(L,Y(0)); g.lineTo(W-R,Y(0)); g.stroke(); g.setLineDash([]); }
+  // precip bars (right axis)
+  const pmax = Math.max(2, ...prec);
+  const bw = Math.max(2, cw/n*.6);
+  g.fillStyle="rgba(74,163,255,.55)";
+  prec.forEach((p,i)=>{ if(p>0){ const bh = p/pmax*ch*.6; g.beginPath(); g.roundRect ? g.roundRect(X(i)-bw/2, T+ch-bh, bw, bh, 2) : g.rect(X(i)-bw/2, T+ch-bh, bw, bh); g.fill(); }});
+  g.textAlign="left"; g.fillStyle="rgba(74,163,255,.8)";
+  g.fillText(r1(pmax)+" mm", W-R+4, T+ch-ch*.6+4);
+  // gust line
+  if (chartMode==="wind"){
+    g.strokeStyle="rgba("+INK+",.35)"; g.setLineDash([3,4]); g.lineWidth=1.5; g.beginPath();
+    gust.forEach((v,i)=>i?g.lineTo(X(i),Y(v)):g.moveTo(X(i),Y(v))); g.stroke(); g.setLineDash([]);
+  }
+  // main line + fill
+  const path = () => { g.beginPath(); series.forEach((v,i)=>{ if(!i) g.moveTo(X(i),Y(v)); else { const xm=(X(i-1)+X(i))/2; g.bezierCurveTo(xm,Y(series[i-1]),xm,Y(v),X(i),Y(v)); } }); };
+  const grad = g.createLinearGradient(0,T,0,T+ch);
+  if (chartMode==="temp"){ grad.addColorStop(0,tempColor(mx)); grad.addColorStop(1,tempColor(mn)); }
+  else { grad.addColorStop(0,"#b7f0ff"); grad.addColorStop(1,"#5fb7ff"); }
+  path(); g.lineTo(X(n-1),T+ch); g.lineTo(X(0),T+ch); g.closePath();
+  const fill = g.createLinearGradient(0,T,0,T+ch); fill.addColorStop(0,"rgba("+INK+",.18)"); fill.addColorStop(1,"rgba("+INK+",0)");
+  g.fillStyle=fill; g.fill();
+  path(); g.strokeStyle=grad; g.lineWidth=3; g.lineJoin="round"; g.stroke();
+  // labels on extremes / every 3 h
+  g.fillStyle="rgba("+INK+",.55)"; g.textAlign="center";
+  for (let i=0;i<n;i+=3){ const t=h.time[hi+i]; g.fillText(i===0?"Nå":t.slice(11,13), X(i), H-8); }
+  // midnight markers
+  for (let i=1;i<n;i++){ if(h.time[hi+i].slice(11,13)==="00"){ g.strokeStyle="rgba("+INK+",.18)"; g.beginPath(); g.moveTo(X(i),T); g.lineTo(X(i),T+ch); g.stroke();
+    g.fillStyle="rgba("+INK+",.7)"; g.textAlign="left"; g.fillText(new Date(h.time[hi+i]).toLocaleDateString("nb-NO",{weekday:"short"}), X(i)+4, T+10); g.textAlign="center"; g.fillStyle="rgba("+INK+",.55)"; } }
+  // dot now
+  g.fillStyle="#fff"; g.beginPath(); g.arc(X(0),Y(series[0]),4.5,0,7); g.fill();
+}
+$("chartSeg").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return;
+  chartMode=b.dataset.m; [...$("chartSeg").children].forEach(x=>x.classList.toggle("on",x===b)); if(wx) drawChart(currentHi()); });
+function currentHi(){ const i = wx.hourly.time.findIndex(t=>t.slice(0,13)===wx.current.time.slice(0,13)); return i<0?0:i; }
+let rT; window.addEventListener("resize", ()=>{ clearTimeout(rT); rT=setTimeout(()=>{ if(wx) drawChart(currentHi()); fx.resize(); },150); });
+
+/* ---------- Theme + particles ---------- */
+const THEMES = {
+  clear:[["#1e6fd9","#62b4ff"],["#060d24","#1a2a5c"]], partly:[["#2b6cb8","#7fb0de"],["#0a1430","#24345e"]],
+  cloudy:[["#4b5d78","#8698b2"],["#121a2a","#2b364a"]], fog:[["#6b7787","#a6b0bc"],["#1a1f28","#3a414c"]],
+  drizzle:[["#3c5070","#6f86a6"],["#0f1828","#27354c"]], rain:[["#2c3e5c","#566d8f"],["#0b1220","#1f2c42"]],
+  showers:[["#33507a","#6b8cb5"],["#0c1426","#243552"]], snow:[["#7189a8","#b9c9dc"],["#1c2534","#3d4a5e"]],
+  snowshowers:[["#6a84a6","#aec2d9"],["#1a2333","#3a475c"]], sleet:[["#4a5f7d","#8296b2"],["#121b2b","#2d3a50"]], thunder:[["#2a2540","#574a78"],["#0d0a1a","#2a2140"]]
+};
+function setTheme(code, day){
+  const c = cat(code), light = isLight();
+  const t = THEMES[c][day?0:1].map(x => light ? mix(x,"#ffffff", day?.5:.38) : x);
+  document.documentElement.style.setProperty("--bg1", t[0]); document.documentElement.style.setProperty("--bg2", t[1]);
+  document.body.style.background = `linear-gradient(160deg, ${t[0]}, ${t[1]}) fixed`;
+  let mode = null, n = 0;
+  if (["drizzle","rain","showers","thunder","sleet"].includes(c)) { mode="rain"; n = c==="drizzle"?60:c==="rain"||c==="thunder"?160:100; }
+  else if (["snow","snowshowers"].includes(c)) { mode="snow"; n = 110; }
+  else if (c==="clear" && !day && !light) { mode="stars"; n=120; }
+  fx.set(mode, n, c==="thunder");
+}
+const fx = (()=>{
+  const cv = $("fx"), g = cv.getContext("2d"); let W,H,parts=[],mode=null,thunder=false,flash=0, raf;
+  function resize(){ W=cv.width=innerWidth; H=cv.height=innerHeight; }
+  function set(m,n,th){ mode=m; thunder=th; resize();
+    parts = Array.from({length:n},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random(),p:Math.random()*6.28}));
+    cancelAnimationFrame(raf); g.clearRect(0,0,W,H); if (mode && !matchMedia("(prefers-reduced-motion: reduce)").matches) loop(); }
+  function loop(){
+    g.clearRect(0,0,W,H);
+    if (thunder && Math.random()<0.004) flash=1;
+    if (flash>0){ g.fillStyle=`rgba(255,255,255,${flash*.18})`; g.fillRect(0,0,W,H); flash-=0.05; }
+    for (const q of parts){
+      if (mode==="rain"){ q.y += 14+q.s*10; q.x -= 2; if(q.y>H){q.y=-20;q.x=Math.random()*W*1.1;}
+        g.strokeStyle= isLight() ? `rgba(40,80,150,${.12+q.s*.2})` : `rgba(190,215,255,${.15+q.s*.25})`; g.lineWidth=1; g.beginPath(); g.moveTo(q.x,q.y); g.lineTo(q.x-2,q.y+12+q.s*8); g.stroke(); }
+      else if (mode==="snow"){ q.y += .6+q.s*1.4; q.p+=.02; q.x += Math.sin(q.p)*.6; if(q.y>H){q.y=-5;q.x=Math.random()*W;}
+        g.fillStyle= isLight() ? `rgba(110,140,185,${.35+q.s*.4})` : `rgba(255,255,255,${.4+q.s*.5})`; g.beginPath(); g.arc(q.x,q.y,1+q.s*2.2,0,7); g.fill(); }
+      else if (mode==="stars"){ q.p+=.02; g.fillStyle=`rgba(255,255,255,${(.3+Math.sin(q.p)*.3)*q.s+.1})`; g.fillRect(q.x,q.y*.7,1.4,1.4); }
+    }
+    raf = requestAnimationFrame(loop);
+  }
+  return {set, resize};
+})();
+
+/* ---------- Radar ---------- */
+let baseL, labL, map, marker, frames=[], layers=[], fi=0, playing=true, timer=null, host="";
+function initMap(){
+  map = L.map("map",{zoomControl:true, attributionControl:true, maxZoom:12}).setView([loc.lat,loc.lon], 7);
+  baseL = L.tileLayer(tileUrl("nolabels"),{maxZoom:12, subdomains:"abcd",
+    attribution:'Kart © <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, © OpenStreetMap · Radar © <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
+  map.createPane("labels"); map.getPane("labels").style.zIndex=450; map.getPane("labels").style.pointerEvents="none";
+  labL = L.tileLayer(tileUrl("only_labels"),{maxZoom:12, subdomains:"abcd", pane:"labels"}).addTo(map);
+  marker = L.marker([loc.lat,loc.lon],{icon:L.divIcon({className:"",html:'<div class="pulse"></div>',iconSize:[14,14]}), zIndexOffset:1000}).addTo(map);
+  loadRadar();
+  setInterval(loadRadar, 5*60*1000);
+}
+// Kartet lages først når fanen faktisk vises (Leaflet tåler ikke å starte i en skjult boks)
+function ensureMap(){
+  if (map) return true;
+  if (!window.L){ $("rvNote").textContent = "Kartbiblioteket (Leaflet) kunne ikke lastes. Sjekk nettforbindelsen og last siden på nytt."; return false; }
+  try { initMap(); return true; }
+  catch(e){ console.error(e); $("rvNote").textContent = "Kartet kunne ikke startes: " + e.message; return false; }
+}
+function updateRadarCenter(){ setMetArea(); if(!map) return; map.setView([loc.lat,loc.lon], map.getZoom()); marker.setLatLng([loc.lat,loc.lon]); }
+async function loadRadar(){
+  try{
+    const r = await fetch("https://api.rainviewer.com/public/weather-maps.json"); const j = await r.json();
+    host = j.host; const nf = [...(j.radar.past||[]), ...(j.radar.nowcast||[]).map(f=>({...f,nowcast:true}))];
+    if (!nf.length) throw new Error("ingen radarbilder");
+    layers.forEach(l=>map.removeLayer(l));
+    frames = nf;
+    layers = frames.map(f => L.tileLayer(`${host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`, {opacity:0, maxNativeZoom:7, maxZoom:12, tileSize:256, zIndex:300}).addTo(map));
+    $("slider").max = frames.length-1;
+    const lastPast = (j.radar.past||[]).length-1;
+    show(Math.max(0,lastPast));
+    if (playing) play(true);
+    $("rvNote").textContent = "";
+  }catch(e){
+    console.warn("RainViewer:", e);
+    $("rtime").textContent = "Radar utilgjengelig";
+    $("rvNote").innerHTML = "RainViewer leverer ikke radardata akkurat nå. Kartet og vindanimasjonen virker fortsatt – bruk <b>MET-radar</b>-fanen for nedbør.";
+  }
+}
+function show(i){
+  if (!frames.length) return;
+  layers[fi] && layers[fi].setOpacity(0);
+  fi = (i+frames.length)%frames.length;
+  layers[fi].setOpacity(.75);
+  $("slider").value = fi;
+  const f = frames[fi], d = new Date(f.time*1000);
+  const ago = Math.round((Date.now()-d)/60000);
+  $("rtime").innerHTML = d.toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"}) +
+    ` <span style="color:var(--muted);font-weight:500">${f.nowcast?"prognose":ago<=10?"· siste":"· "+ago+" min siden"}</span>`;
+}
+const PLAY='<svg width="18" height="18" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>';
+const PAUSE='<svg width="18" height="18" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>';
+function play(on){
+  playing = on; $("play").innerHTML = on?PAUSE:PLAY; clearTimeout(timer);
+  if (on){ const step = () => { show(fi+1); timer = setTimeout(step, fi===frames.length-1?1800:450); }; timer=setTimeout(step,450); }
+}
+$("play").onclick = () => play(!playing);
+$("slider").oninput = e => { play(false); show(+e.target.value); };
+
+/* ---------- MET-radar ---------- */
+function areaFor(lat,lon){
+  if (lat<57.5||lat>71.5||lon<4||lon>31.5) return "nordic";
+  if (lat>=69.6 && lon>=21.5) return "finnmark";
+  if (lat>=68.4) return "troms";
+  if (lat>=67) return "northern_nordland";
+  if (lat>=64.9) return "southern_nordland";
+  if (lat>=62.3) return lon<9 ? "northwestern_norway" : "central_norway";
+  if (lon<7.3) return lat>=59.9 ? "western_norway" : "southwestern_norway";
+  if (lat<59.0 && lon<9.5) return "southern_norway";
+  if (lat>=60.6) return "eastern_norway";
+  return "southeastern_norway";
+}
+let areaLocKey = null, radMode = "met";
+function metRadarUrl(){ return `https://api.met.no/weatherapi/radar/2.0/?type=${$("rtype").value}&area=${$("area").value}&content=animation`; }
+function refreshMetRadar(){ $("metImg").src = metRadarUrl(); }
+function setMetArea(){
+  const key = loc.lat+","+loc.lon; if (key===areaLocKey) return; areaLocKey = key;
+  const a = areaFor(+loc.lat, +loc.lon);
+  $("area").value = a;
+  // Kun 'norway'/'nordic' støtter alle typer – alle valgte typer her støttes av alle områder
+  refreshMetRadar();
+  setRadMode(a==="nordic" && (loc.lon<4||loc.lon>31.5||loc.lat<54) ? "rv" : radMode);
+}
+function setRadMode(m){
+  radMode = m;
+  [...$("radSeg").children].forEach(b=>b.classList.toggle("on", b.dataset.r===m));
+  $("metRad").style.display = m==="met" ? "" : "none";
+  $("rvRad").style.display = m==="rv" ? "" : "none";
+  if (m==="rv" && ensureMap()){ setTimeout(()=>{ map.invalidateSize(); map.setView([loc.lat,loc.lon], map.getZoom()); },60); }
+}
+$("radSeg").addEventListener("click", e => { const b=e.target.closest("button"); if(b) setRadMode(b.dataset.r); });
+$("area").onchange = refreshMetRadar; $("rtype").onchange = refreshMetRadar;
+$("metImg").onerror = () => { $("metImg").alt = "Fikk ikke lastet radarbildet fra MET"; };
+setInterval(refreshMetRadar, 5*60*1000);
+
+/* ---------- Search & geolocation ---------- */
+let sT, hits=[], sel=-1;
+$("q").addEventListener("input", e => { clearTimeout(sT); const q=e.target.value.trim(); if(q.length<2){ $("res").style.display="none"; return; }
+  sT = setTimeout(async ()=>{ try{
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=7&language=no&format=json`);
+    const j = await r.json(); hits = j.results||[]; sel=-1; drawHits();
+  }catch(e){} }, 220); });
+function drawHits(){
+  if (!hits.length){ $("res").innerHTML='<button disabled>Ingen treff</button>'; $("res").style.display="block"; return; }
+  $("res").innerHTML = hits.map((h,i)=>`<button data-i="${i}" class="${i===sel?"active":""}">${h.name}<small>${[h.admin1,h.country].filter(Boolean).join(", ")}</small></button>`).join("");
+  $("res").style.display="block";
+}
+$("q").addEventListener("keydown", e => {
+  if ($("res").style.display!=="block" || !hits.length) return;
+  if (e.key==="ArrowDown"){ sel=Math.min(hits.length-1,sel+1); drawHits(); e.preventDefault(); }
+  else if (e.key==="ArrowUp"){ sel=Math.max(0,sel-1); drawHits(); e.preventDefault(); }
+  else if (e.key==="Enter"){ choose(hits[Math.max(0,sel)]); }
+  else if (e.key==="Escape"){ $("res").style.display="none"; }
+});
+$("res").addEventListener("click", e => { const b=e.target.closest("button[data-i]"); if(b) choose(hits[+b.dataset.i]); });
+document.addEventListener("click", e => { if(!e.target.closest(".search")) $("res").style.display="none"; });
+function choose(h){
+  setLoc({name:h.name, sub:[h.admin1,h.country].filter(Boolean).join(", "), lat:h.latitude, lon:h.longitude, tz:h.timezone||"Europe/Oslo"});
+  $("q").value=""; $("res").style.display="none"; $("q").blur();
+}
+function setLoc(l){ loc=l; try{localStorage.setItem("vaer-loc",JSON.stringify(l));}catch(e){} load(); }
+$("geo").onclick = () => {
+  if (!navigator.geolocation) return showErr("Nettleseren støtter ikke posisjon.");
+  $("geo").style.opacity=.5;
+  navigator.geolocation.getCurrentPosition(async p => {
+    $("geo").style.opacity=1;
+    const lat=+p.coords.latitude.toFixed(4), lon=+p.coords.longitude.toFixed(4);
+    let name="Min posisjon", sub="";
+    try{ const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=no`);
+      const j = await r.json(); name = j.locality||j.city||name; sub=[j.principalSubdivision,j.countryName].filter(Boolean).join(", "); }catch(e){}
+    setLoc({name, sub, lat, lon, tz: Intl.DateTimeFormat().resolvedOptions().timeZone});
+  }, err => { $("geo").style.opacity=1; showErr("Fikk ikke tilgang til posisjonen din. Søk etter sted i stedet."); }, {enableHighAccuracy:true, timeout:10000});
+};
+
+/* =====================================================================
+   EKSTRA: lys/mørk, favoritter, farevarsler, luft, hav, tidevann,
+   målestasjon, dagsdetaljer, vindanimasjon
+   ===================================================================== */
+const LS = { get(k,d){ try{ const v = JSON.parse(localStorage.getItem(k)); return v ?? d; }catch(e){ return d; } },
+             set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} } };
+const MB = "https://api.met.no/weatherapi";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TZ = () => loc.tz || "Europe/Oslo";
+const fmtT  = iso => new Date(iso).toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit",timeZone:TZ()});
+const fmtDT = iso => new Date(iso).toLocaleString("nb-NO",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",timeZone:TZ()});
+const LL = () => `lat=${(+loc.lat).toFixed(4)}&lon=${(+loc.lon).toFixed(4)}`;
+
+/* ---------- Lys / mørk modus ---------- */
+let uiMode = LS.get("vaer-mode","auto");
+const mq = matchMedia("(prefers-color-scheme: light)");
+function isLight(){ return uiMode==="light" || (uiMode==="auto" && mq.matches); }
+function mix(hex, hex2, t){
+  const p = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); const a=p(hex), b=p(hex2);
+  return "#" + a.map((v,i)=>Math.round(v+(b[i]-v)*t).toString(16).padStart(2,"0")).join("");
+}
+// Esri sitt grå kartgrunnlag – krever ingen API-nøkkel (CARTO gjør det nå)
+function tileUrl(kind){
+  const tone = isLight() ? "Light" : "Dark", part = kind==="only_labels" ? "Reference" : "Base";
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${tone}_Gray_${part}/MapServer/tile/{z}/{y}/{x}`;
+}
+function applyMode(){
+  document.documentElement.classList.toggle("light", isLight());
+  if (baseL){ baseL.setUrl(tileUrl("nolabels")); labL.setUrl(tileUrl("only_labels")); }
+  if (wx){ setTheme(wx.current.weather_code, wx.current.is_day); drawChart(currentHi()); }
+}
+mq.addEventListener && mq.addEventListener("change", () => { if (uiMode==="auto") applyMode(); });
+
+/* ---------- Favoritter ---------- */
+let favs = LS.get("vaer-favs", []);
+const favCache = {};
+const sameLoc = (a,b) => Math.abs(a.lat-b.lat)<0.01 && Math.abs(a.lon-b.lon)<0.01;
+const isFav = () => favs.some(f => sameLoc(f,loc));
+function updateStar(){ const s=$("star"); if(!s) return; const on=isFav(); s.textContent = on?"★":"☆"; s.classList.toggle("on",on); s.title = on?"Fjern fra favoritter":"Lagre som favoritt"; }
+function toggleFav(){
+  if (isFav()) favs = favs.filter(f => !sameLoc(f,loc)); else favs.push({...loc});
+  LS.set("vaer-favs", favs); renderFavs(); updateStar();
+}
+$("place").addEventListener("click", e => { if (e.target.id==="star") toggleFav(); });
+function renderFavs(){
+  const box = $("favs");
+  if (!favs.length){ box.innerHTML = `<div class="favhint">☆ Trykk på stjernen ved stedsnavnet for å lagre favorittsteder</div>`; return; }
+  box.innerHTML = favs.map((f,i)=>`<button class="fav ${sameLoc(f,loc)?"on":""}" data-i="${i}"><span class="fi" id="fi${i}"></span><span class="fn">${esc(f.name)}</span><span class="ft" id="ft${i}"></span><span class="fx" data-x="${i}" title="Fjern">×</span></button>`).join("");
+  favs.forEach(async (f,i) => {
+    const k = f.lat+","+f.lon; let c = favCache[k];
+    if (!c || Date.now()-c.at > 10*60e3){
+      try{
+        const j = await getJSON(`${MB}/locationforecast/2.0/compact?lat=${(+f.lat).toFixed(4)}&lon=${(+f.lon).toFixed(4)}`);
+        const e = j.properties.timeseries[0].data;
+        c = favCache[k] = {at:Date.now(), t:e.instant.details.air_temperature, s:sym((e.next_1_hours||e.next_6_hours).summary.symbol_code)};
+      }catch(err){ return; }
+    }
+    const fi=$("fi"+i), ft=$("ft"+i); if (fi){ fi.innerHTML = icon(c.s.code,c.s.day); ft.textContent = r0(c.t)+"°"; }
+  });
+}
+$("favs").addEventListener("click", e => {
+  const x = e.target.closest("[data-x]");
+  if (x){ e.stopPropagation(); favs.splice(+x.dataset.x,1); LS.set("vaer-favs",favs); renderFavs(); updateStar(); return; }
+  const b = e.target.closest(".fav"); if (b) setLoc({...favs[+b.dataset.i]});
+});
+
+/* ---------- Farevarsler (MetAlerts) ---------- */
+const LVLTXT = {yellow:"Gult", orange:"Oransje", red:"Rødt"}, LVLORD = {red:3, orange:2, yellow:1};
+function alertLevel(f){ const a = (f.properties.awareness_level||"").split(";")[1]; return (a || f.properties.riskMatrixColor || "yellow").trim().toLowerCase(); }
+async function loadAlerts(){
+  const box = $("alerts");
+  try{
+    const j = await getJSON(`${MB}/metalerts/2.0/current.json?${LL()}&lang=no`);
+    const fs = (j.features||[]).filter(f => f.properties && f.properties.status!=="Test");
+    fs.sort((a,b) => (LVLORD[alertLevel(b)]||0) - (LVLORD[alertLevel(a)]||0));
+    box.innerHTML = fs.map(f => {
+      const p = f.properties, c = alertLevel(f), iv = (f.when && f.when.interval) || [];
+      return `<details class="alert ${c}"><summary><span class="adot"></span><b>${esc(p.eventAwarenessName||p.event)}</b> · ${LVLTXT[c]||""} nivå
+        <span class="aarea">${esc(p.area||"")}</span><span class="atime">${iv[0] ? fmtDT(iv[0])+" – "+fmtDT(iv[1]) : ""}</span></summary>
+        <div class="abody">${p.description?`<p>${esc(p.description)}</p>`:""}${p.consequences?`<p><b>Konsekvenser:</b> ${esc(p.consequences)}</p>`:""}${p.instruction?`<p><b>Råd:</b> ${esc(p.instruction)}</p>`:""}</div></details>`;
+    }).join("");
+  }catch(e){ box.innerHTML = ""; }
+}
+
+/* ---------- Luftkvalitet ---------- */
+const AQ = [[2,"Lite","#3ecf6a"],[3,"Moderat","#f5c33d"],[4,"Høy","#f2503a"],[1e9,"Svært høy","#a64bd6"]];
+const aqCls = v => AQ.find(a => (v??0) < a[0]);
+async function loadAir(){
+  const el = $("air");
+  try{
+    const j = await getJSON(`${MB}/airqualityforecast/0.1/?${LL()}&areaclass=grunnkrets`);
+    const T = j.data.time, now = Date.now();
+    let i = T.findIndex(t => Date.parse(t.from) <= now && now < Date.parse(t.to)); if (i<0) i = 0;
+    const v = k => T[i].variables[k] ? T[i].variables[k].value : null;
+    const aqi = v("AQI"), c = aqCls(aqi);
+    const next = T.slice(i, i+24).map(t => t.variables.AQI ? t.variables.AQI.value : 0);
+    const where = j.meta && j.meta.location && j.meta.location.name;
+    el.innerHTML = `<div class="aqtop"><div class="aqnum" style="color:${c[2]}">${r1(aqi)}</div>
+      <div><div class="aqlab" style="color:${c[2]}">${c[1]} luftforurensning</div><div class="s">${esc(where||"")}</div></div></div>
+      <div class="aqgrid">${[["PM2,5","pm25_concentration"],["PM10","pm10_concentration"],["NO₂","no2_concentration"],["O₃","o3_concentration"]]
+        .map(([n,k])=>`<div><span>${n}</span><b>${r0(v(k))}</b><small>µg/m³</small></div>`).join("")}</div>
+      <div class="spark">${next.map(a=>`<i style="height:${Math.max(4,Math.min(100,a/4*100))}%;background:${aqCls(a)[2]}"></i>`).join("")}</div>
+      <div class="nclab"><span>Nå</span><span>Neste 24 timer</span></div>`;
+  }catch(e){ el.innerHTML = `<div class="s">Luftkvalitetsvarsel finnes bare for steder i Norge.</div>`; }
+}
+
+/* ---------- Hav (Oceanforecast) ---------- */
+async function loadSea(){
+  const el = $("sea");
+  try{
+    const j = await getJSON(`${MB}/oceanforecast/2.0/complete?${LL()}`);
+    const ts = j.properties && j.properties.timeseries; if (!ts || !ts.length) throw 0;
+    const d = ts[0].data.instant.details;
+    const wh = ts.slice(0,24).map(t => t.data.instant.details.sea_surface_wave_height).filter(v=>v!=null);
+    el.innerHTML = `<div class="kv">
+      <div><span>Sjøtemperatur</span><b>${r1(d.sea_water_temperature)}°</b></div>
+      <div><span>Bølgehøyde</span><b>${d.sea_surface_wave_from_direction!=null?ARROW(d.sea_surface_wave_from_direction):""}${r1(d.sea_surface_wave_height)} <small>m</small></b></div>
+      <div><span>Strøm</span><b>${d.sea_water_to_direction!=null?ARROW(d.sea_water_to_direction+180):""}${r1(d.sea_water_speed)} <small>m/s</small></b></div>
+      <div><span>Maks bølger 24 t</span><b>${wh.length?r1(Math.max(...wh)):"–"} <small>m</small></b></div></div>`;
+  }catch(e){ el.innerHTML = `<div class="s">Ingen havvarsel her – stedet ligger for langt fra kysten.</div>`; }
+}
+
+/* ---------- Tidevann (Kartverket) ---------- */
+async function loadTide(){
+  const el = $("tide");
+  const p2 = n => String(n).padStart(2,"0");
+  const f = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const now = new Date(), to = new Date(now.getTime()+36*3600e3);
+  try{
+    const r = await fetch(`https://vannstand.kartverket.no/tideapi.php?tide_request=locationdata&${LL()}&fromtime=${f(now)}&totime=${f(to)}&datatype=tab&refcode=cd&lang=nb&interval=60&dst=1&tzone=1`);
+    if (!r.ok) throw 0;
+    const x = new DOMParser().parseFromString(await r.text(), "text/xml");
+    const wl = [...x.getElementsByTagName("waterlevel")]
+      .map(w => ({v:+w.getAttribute("value"), t:w.getAttribute("time"), f:(w.getAttribute("flag")||"").toLowerCase()}))
+      .filter(w => w.f==="high" || w.f==="low").slice(0,4);
+    if (!wl.length) throw 0;
+    const L0 = x.getElementsByTagName("location")[0], name = L0 && L0.getAttribute("name");
+    el.innerHTML = `<div class="tides">${wl.map(w=>`<div class="tide"><span>${w.f==="high"?"▲ Flo":"▼ Fjære"} <span class="tl">${new Date(w.t).toLocaleDateString("nb-NO",{weekday:"short"})}</span></span><b>${fmtT(w.t)}</b><span>${Math.round(w.v)} cm</span></div>`).join("")}</div>
+      <div class="note">Tidevann ${name?"for "+esc(name)+" ":""}fra Kartverket, i forhold til sjøkartnull</div>`;
+  }catch(e){ el.innerHTML = `<div class="note">Tidevann ikke tilgjengelig her. <a href="https://kartverket.no/til-sjos/se-havniva" target="_blank">Se havnivå hos Kartverket</a></div>`; }
+}
+
+/* ---------- Målestasjon (MET Frost) ---------- */
+async function loadObs(){
+  const el = $("obs"), id = LS.get("vaer-frost","");
+  if (!id){
+    el.innerHTML = `<div class="s">Se hva det faktisk måles på nærmeste værstasjon. Dette krever en gratis klient-ID fra MET:
+      <a href="https://frost.met.no/auth/requestCredentials.html" target="_blank">registrer deg her</a> (ett minutt), og lim inn ID-en.</div>
+      <form class="frostf"><input id="frostId" placeholder="Klient-ID" autocomplete="off"><button class="btn sm">Lagre</button></form>`;
+    el.querySelector("form").onsubmit = e => { e.preventDefault(); const v = $("frostId").value.trim(); if (v){ LS.set("vaer-frost", v); loadObs(); } };
+    return;
+  }
+  const H = {headers:{Authorization:"Basic "+btoa(id+":")}};
+  try{
+    const geo = encodeURIComponent(`nearest(POINT(${(+loc.lon).toFixed(4)} ${(+loc.lat).toFixed(4)}))`);
+    const sr = await fetch(`https://frost.met.no/sources/v0.jsonld?types=SensorSystem&geometry=${geo}&nearestmaxcount=8`, H);
+    if (sr.status===401 || sr.status===403) throw new Error("auth");
+    if (!sr.ok) throw new Error("none");
+    const src = (await sr.json()).data || [];
+    const els = encodeURIComponent("air_temperature,wind_speed,wind_from_direction,relative_humidity,sum(precipitation_amount PT1H)");
+    const or = await fetch(`https://frost.met.no/observations/v0.jsonld?sources=${src.map(x=>x.id).join(",")}&referencetime=latest&maxage=PT3H&elements=${els}`, H);
+    if (!or.ok) throw new Error("none");
+    const by = {};
+    for (const d of (await or.json()).data || []){
+      const sid = d.sourceId.split(":")[0], b = by[sid] || (by[sid] = {t:d.referenceTime});
+      if (d.referenceTime > b.t) b.t = d.referenceTime;
+      for (const ob of d.observations) if (b[ob.elementId]==null) b[ob.elementId] = ob.value;
+    }
+    const st = src.find(x => by[x.id] && by[x.id].air_temperature!=null); if (!st) throw new Error("none");
+    const b = by[st.id], fc = wx && wx.current ? wx.current.temperature_2m : null;
+    const diff = fc!=null ? b.air_temperature - fc : null;
+    const title = st.name ? st.name.toLowerCase().replace(/(^|[\s\-(])\S/g, m=>m.toUpperCase()) : st.id;
+    el.innerHTML = `<div class="obsbig"><b>${r1(b.air_temperature)}°</b>${diff!=null?`<span class="diff">${diff>=0?"+":""}${r1(diff)}° mot varselet</span>`:""}</div>
+      <div class="kv">
+        <div><span>Vind</span><b>${b.wind_from_direction!=null?ARROW(b.wind_from_direction):""}${r1(b.wind_speed)} <small>m/s</small></b></div>
+        <div><span>Fuktighet</span><b>${r0(b.relative_humidity)} <small>%</small></b></div>
+        <div><span>Nedbør siste time</span><b>${r1(b["sum(precipitation_amount PT1H)"])} <small>mm</small></b></div>
+        <div><span>Målt</span><b>${fmtT(b.t)}</b></div></div>
+      <div class="note">${esc(title)}${st.distance!=null?` · ${r1(st.distance)} km unna`:""} · <a href="#" id="frostReset">endre klient-ID</a></div>`;
+  }catch(e){
+    const msg = e.message==="auth" ? "Frost godtok ikke klient-ID-en. Sjekk at den er riktig."
+      : e.message==="none" ? "Fant ingen ferske målinger i nærheten."
+      : "Fikk ikke kontakt med Frost fra nettleseren. Det kan skyldes at Frost ikke tillater direkte nettleserkall fra en lokal fil.";
+    el.innerHTML = `<div class="s">${msg} <a href="#" id="frostReset">Endre klient-ID</a></div>`;
+  }
+  const rs = $("frostReset"); if (rs) rs.onclick = e => { e.preventDefault(); LS.set("vaer-frost",""); loadObs(); };
+}
+
+function loadExtras(){ loadFore(); renderFavs(); loadAlerts(); loadAir(); loadSea(); loadTide(); loadObs(); }
+
+/* ---------- Modal (dagsdetaljer + innstillinger) ---------- */
+function openModal(html){ $("mbody").innerHTML = html; $("modal").classList.add("open"); }
+function closeModal(){ $("modal").classList.remove("open"); }
+$("mclose").onclick = closeModal;
+$("modal").addEventListener("click", e => { if (e.target.id==="modal") closeModal(); });
+document.addEventListener("keydown", e => { if (e.key==="Escape") closeModal(); });
+
+$("days").addEventListener("click", e => { const d = e.target.closest(".day[data-i]"); if (d) openDay(+d.dataset.i); });
+function openDay(i){
+  const D = wx.daily, date = D.time[i], st = (wx.steps||[]).filter(s => s.time.slice(0,10)===date);
+  const dn = new Date(date+"T12:00"), name = i===0?"I dag":i===1?"I morgen":dn.toLocaleDateString("nb-NO",{weekday:"long"});
+  const rows = st.map(s => {
+    const hh = +s.time.slice(11,13), lbl = s.hours===1 ? `kl. ${s.time.slice(11,13)}` : `kl. ${String(hh).padStart(2,"0")}–${String((hh+6)%24).padStart(2,"0")}`;
+    const temp = s.tmax!=null ? `${r0(s.tmax)}° <small style="color:var(--muted)">/ ${r0(s.tmin)}°</small>` : `${r0(s.temp)}°`;
+    return `<tr><td>${lbl}</td><td>${icon(s.code,s.day)}</td><td><b>${temp}</b></td>
+      <td class="pc">${s.precip>=0.1?r1(s.precip)+" mm":""}${s.prob!=null&&s.prob>=20?` <small style="color:var(--muted)">${r0(s.prob)} %</small>`:""}</td>
+      <td><span class="w">${s.dir!=null?SARROW(s.dir):""}${r0(s.wind)}${s.gust!=null?` (${r0(s.gust)})`:""} m/s</span></td></tr>`;
+  }).join("");
+  openModal(`<div class="mhead">${icon(D.weather_code[i],1)}<div><h3>${name[0].toUpperCase()+name.slice(1)}</h3>
+      <div class="s">${dn.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"})}</div></div>
+      <div class="mtemp">${r0(D.temperature_2m_max[i])}° <small>/ ${r0(D.temperature_2m_min[i])}°</small></div></div>
+    <div class="mstats"><span>${DESC[D.weather_code[i]]||""}</span><span>Nedbør ${r1(D.precipitation_sum[i])} mm</span>
+      <span>Vind opptil ${r0(D.wind_speed_10m_max[i])} m/s</span>${D.uv_index_max[i]!=null?`<span>UV ${r0(D.uv_index_max[i])}</span>`:""}
+      ${i===0&&D.sunrise[0]?`<span>Sol ↑ ${hhmm(D.sunrise[0])} ↓ ${hhmm(D.sunset[0])}</span>`:""}</div>
+    ${rows?`<table class="mt">${rows}</table>`:`<div class="s">Ingen detaljer for denne dagen.</div>`}
+    ${st.some(s=>s.hours===6)?`<div class="note">Lenger frem gir MET varsel i 6-timers perioder.</div>`:""}`);
+}
+
+$("setBtn").onclick = () => {
+  openModal(`<h3 style="font-size:20px">Innstillinger</h3>
+    <div class="setrow"><label>Utseende</label><div class="seg" id="modeSeg">
+      ${[["auto","Følg systemet"],["light","Lys"],["dark","Mørk"]].map(([k,t])=>`<button data-k="${k}" class="${uiMode===k?"on":""}">${t}</button>`).join("")}</div></div>
+    <div class="setrow"><label>MET Frost klient-ID (for målestasjon)</label>
+      <form class="setf" id="setFrost"><input id="setFrostId" value="${esc(LS.get("vaer-frost",""))}" placeholder="Lim inn klient-ID" autocomplete="off"><button class="btn sm">Lagre</button></form>
+      <div class="note"><a href="https://frost.met.no/auth/requestCredentials.html" target="_blank">Få en gratis klient-ID hos MET</a></div></div>
+    <div class="setrow"><label>Favoritter</label><div class="s">${favs.length} lagret · fjern dem med × i listen øverst</div></div>`);
+  $("modeSeg").onclick = e => { const b = e.target.closest("button"); if(!b) return; uiMode = b.dataset.k; LS.set("vaer-mode", uiMode);
+    [...$("modeSeg").children].forEach(x=>x.classList.toggle("on", x===b)); applyMode(); };
+  $("setFrost").onsubmit = e => { e.preventDefault(); LS.set("vaer-frost", $("setFrostId").value.trim()); loadObs(); closeModal(); };
+};
+
+/* ---------- Vindanimasjon på kartet ---------- */
+const wind = (() => {
+  let cv, g, grid = null, parts = [], raf = null, on = false, reqId = 0;
+  function attach(){
+    cv = document.createElement("canvas"); cv.className = "windcv"; map.getContainer().appendChild(cv); g = cv.getContext("2d");
+    map.on("movestart zoomstart", () => { if (on){ cancelAnimationFrame(raf); g.clearRect(0,0,cv.width,cv.height); } });
+    map.on("moveend zoomend resize", () => { if (on) refresh(); });
+  }
+  async function refresh(){
+    const sz = map.getSize(); if (!sz.x) return; cv.width = sz.x; cv.height = sz.y;
+    const b = map.getBounds().pad(0.15), N = 9, M = 9, lats = [], lons = [];
+    const s = Math.max(-85,b.getSouth()), n = Math.min(85,b.getNorth()), w = b.getWest(), e = b.getEast();
+    for (let r=0;r<N;r++) for (let c=0;c<M;c++){ lats.push((s+(n-s)*r/(N-1)).toFixed(3)); lons.push(((((w+(e-w)*c/(M-1))+540)%360)-180).toFixed(3)); }
+    const id = ++reqId;
+    try{
+      const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`);
+      if (id !== reqId || !on) return;
+      const arr = Array.isArray(j) ? j : [j], U = [], V = [];
+      arr.forEach(p => { const sp = p.current.wind_speed_10m, d = p.current.wind_direction_10m*Math.PI/180; U.push(-sp*Math.sin(d)); V.push(-sp*Math.cos(d)); });
+      grid = {s,n,w,e,N,M,U,V};
+      parts = Array.from({length:Math.min(2500, Math.round(cv.width*cv.height/700))}, () => fresh(true));
+      cancelAnimationFrame(raf); const step = () => { frame(); raf = requestAnimationFrame(step); }; step();
+    }catch(err){}
+  }
+  function sample(lat, lon){
+    const G = grid, fy = (lat-G.s)/(G.n-G.s)*(G.N-1), fx = (lon-G.w)/(G.e-G.w)*(G.M-1);
+    if (fx<0 || fy<0 || fx>G.M-1 || fy>G.N-1) return null;
+    const x0=Math.floor(fx), y0=Math.floor(fy), x1=Math.min(x0+1,G.M-1), y1=Math.min(y0+1,G.N-1), tx=fx-x0, ty=fy-y0, I=(r,c)=>r*G.M+c;
+    const bl = A => (A[I(y0,x0)]*(1-tx)+A[I(y0,x1)]*tx)*(1-ty) + (A[I(y1,x0)]*(1-tx)+A[I(y1,x1)]*tx)*ty;
+    return [bl(G.U), bl(G.V)];
+  }
+  const fresh = rnd => ({x:Math.random()*cv.width, y:Math.random()*cv.height, age: rnd ? Math.random()*80|0 : 0});
+  const col = s => s<3?"rgba(170,225,255,.75)":s<6?"rgba(120,240,190,.85)":s<10?"rgba(255,230,110,.9)":s<15?"rgba(255,150,70,.95)":"rgba(255,80,100,1)";
+  function frame(){
+    g.globalCompositeOperation = "destination-in"; g.fillStyle = "rgba(0,0,0,.9)"; g.fillRect(0,0,cv.width,cv.height);
+    g.globalCompositeOperation = "source-over"; g.lineWidth = 1.3;
+    for (const p of parts){
+      const ll = map.containerPointToLatLng([p.x,p.y]), v = sample(ll.lat, ll.lng);
+      if (!v || ++p.age > 90){ Object.assign(p, fresh(false)); continue; }
+      const nx = p.x + v[0]*.4, ny = p.y - v[1]*.4;
+      g.strokeStyle = col(Math.hypot(v[0],v[1])); g.beginPath(); g.moveTo(p.x,p.y); g.lineTo(nx,ny); g.stroke();
+      p.x = nx; p.y = ny;
+    }
+  }
+  function set(v){
+    on = v; if (!cv) attach(); cv.style.display = v ? "" : "none";
+    if (v) refresh(); else { cancelAnimationFrame(raf); g.clearRect(0,0,cv.width,cv.height); }
+  }
+  return { set, isOn: () => on };
+})();
+$("windBtn").onclick = () => { if (!map) return; const v = !wind.isOn(); $("windBtn").classList.toggle("on", v); wind.set(v); };
+
+/* =====================================================================
+   FØRE-ASSISTENT – faste regler, ingen AI-gjetting.
+   Ser på temperatur, bakketemperatur, nedbør siste døgn, nedbørtype nå,
+   snødekke, rim, vind, tåke og mørke – og skriver korte råd per aktivitet.
+   ===================================================================== */
+let foreLast = null;
+async function loadFore(){
+  let P = null;
+  try{
+    const vars = "temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,snow_depth,soil_temperature_0cm";
+    const j = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${(+loc.lat).toFixed(4)}&longitude=${(+loc.lon).toFixed(4)}&timezone=auto&past_days=1&forecast_days=1&hourly=${vars}`);
+    const nowLocal = new Date(Date.now() + (j.utc_offset_seconds||0)*1000).toISOString().slice(0,13);
+    const i = j.hourly.time.findIndex(t => t.slice(0,13) === nowLocal);
+    if (i >= 0) P = {h:j.hourly, i};
+  }catch(e){ console.warn("Føre: fikk ikke historikk", e); }
+  foreLast = assessFore(P);
+  renderFore(foreLast);
+}
+
+const sum = a => a.reduce((x,y)=>x+(y||0),0);
+const FREEZING = [56,57,66,67];
+function assessFore(P){
+  const c = wx.current, H = wx.hourly, hi = currentHi();
+  const T = c.temperature_2m, RH = c.relative_humidity_2m, feelsT = c.apparent_temperature;
+  const nx = k => (H[k]||[]).slice(hi, hi+3);
+  const nxP = sum(nx("precipitation")), nxCats = nx("weather_code").map(cat), nowCat = cat(c.weather_code);
+  const has = (...cs) => cs.some(x => nowCat===x || nxCats.includes(x));
+  const gust6 = Math.max(c.wind_gusts_10m||0, ...(H.wind_gusts_10m||[]).slice(hi,hi+6).filter(v=>v!=null));
+
+  const snowing = has("snow","snowshowers") && nxP >= 0.2;
+  const sleeting = has("sleet") && nxP >= 0.2;
+  const raining = has("rain","showers","drizzle","thunder") && nxP >= 0.2;
+  const heavyRain = raining && nxP >= 4;
+  const fog = nowCat === "fog";
+
+  // Siste døgn (Open-Meteo, past_days=1)
+  const past = {ok:!!P, rain12:0, snow24:0, prec24:0, tmax12:T, frz:false, depth:0, ground:null, cloud:null};
+  if (P){
+    const h = P.h, i = P.i, idx = (a,b) => { const r=[]; for(let k=Math.max(0,a);k<=Math.min(h.time.length-1,b);k++) r.push(k); return r; };
+    for (const k of idx(i-12, i)){ past.rain12 += (h.rain[k]||0)+(h.showers[k]||0); if (h.temperature_2m[k]!=null) past.tmax12 = Math.max(past.tmax12, h.temperature_2m[k]); }
+    for (const k of idx(i-24, i)){ past.snow24 += h.snowfall[k]||0; past.prec24 += h.precipitation[k]||0; }
+    for (const k of idx(i-12, i+3)) if (FREEZING.includes(h.weather_code[k])) past.frz = true;
+    past.depth = (h.snow_depth[i]||0)*100;
+    past.ground = h.soil_temperature_0cm ? h.soil_temperature_0cm[i] : null;
+    past.cloud = h.cloud_cover[i];
+  }
+  const ground = past.ground ?? T;
+
+  // Is / glatte partier (0 = ingen, 1 = glatte partier, 2 = svært glatt)
+  let ice = 0, iceTxt = "";
+  if (past.frz){ ice = 2; iceTxt = "underkjølt regn gjør det speilglatt"; }
+  else if (raining && ground <= 0 && T > -3 && T <= 3){ ice = 2; iceTxt = "regn på frossen bakke gir fare for svart is"; }
+  else if (past.rain12 >= 0.5 && T <= 0.5 && past.tmax12 > 0.5){ ice = 2; iceTxt = "regnet har frosset til is etter at temperaturen falt under null"; }
+  else if (sleeting && T <= 1.5){ ice = 1; iceTxt = "sludd rundt null gjør det sleipt"; }
+  else if (past.depth > 0.5 && T <= 0.5 && past.tmax12 > 0.5){ ice = 1; iceTxt = "mildvær etterfulgt av frost gjør snøen hard og glatt"; }
+  else if (past.depth > 0.5 && T > -1 && T <= 1.5 && !snowing){ ice = 1; iceTxt = "snø rundt null grader blir sleip"; }
+  else if (T <= 0.5 && RH >= 90 && past.cloud != null && past.cloud < 40){ ice = 1; iceTxt = "klarvær og frost kan gi rim på bakken"; }
+  else if (!snowing && T <= 1.5 && T >= -4 && (past.prec24 >= 0.3 || (ground <= 0 && RH >= 92))){ ice = 1; iceTxt = "fuktig bakke rundt null gir glatte partier"; }
+
+  // Snø / slaps (0–2)
+  let snow = 0, snowTxt = "";
+  if (snowing){ snow = nxP >= 2 ? 2 : 1; snowTxt = nxP >= 2 ? "kraftig snøfall" : "snøfall"; }
+  else if (past.snow24 >= 10){ snow = 2; snowTxt = `${r0(past.snow24)} cm nysnø siste døgn`; }
+  else if (past.snow24 >= 2){ snow = 1; snowTxt = `${r0(past.snow24)} cm nysnø siste døgn`; }
+  else if (past.depth > 0.5 && T > 1){ snow = 1; snowTxt = "slaps og våt snø"; }
+
+  // Mørke
+  const D = wx.daily, now = c.time.slice(11,16);
+  const sr = D.sunrise && D.sunrise[0] ? D.sunrise[0].slice(11,16) : null, ss = D.sunset && D.sunset[0] ? D.sunset[0].slice(11,16) : null;
+  const dark = sr && ss ? (now < sr || now > ss) : !c.is_day;
+
+  const F = {T, ground, RH, feelsT, gust6, nxP, raining, heavyRain, snowing, sleeting, fog, dark, ice, iceTxt, snow, snowTxt, past};
+  const A = [
+    act("🚶","Gå",      walk(F)),
+    act("🏃","Løpe",    run(F)),
+    act("🚲","Sykle",   bike(F)),
+    act("🚗","Kjøre",   drive(F)),
+  ];
+  return {F, A};
+}
+const cap = s => s ? s[0].toUpperCase()+s.slice(1) : s;
+function act(emo, name, r){ return {emo, name, ...r}; }
+function out(lvl, reasons, tip, okTxt, words){
+  const head = words[lvl];
+  const body = reasons.length ? cap(reasons.join(", ")) + "." : okTxt;
+  return {lvl, head, text: body + (tip ? " " + tip : "")};
+}
+const W_GO = ["Fint","Vær obs","Dårlig"], W_BIKE = ["Fint","Vær obs","Frarådes"], W_CAR = ["Fint","Vær obs","Krevende"];
+
+function walk(F){
+  let l = 0, r = [], tips = [];
+  if (F.ice){ l = Math.max(l, F.ice); r.push(F.iceTxt); tips.push("Bruk brodder."); }
+  if (F.snow){ l = Math.max(l, 1); r.push(F.snowTxt); if (!F.ice) tips.push("Gode sko med grep."); }
+  if (F.heavyRain){ l = Math.max(l,1); r.push("kraftig regn"); } else if (F.raining && !F.ice) r.push("litt regn");
+  if (F.gust6 >= 20){ l = 2; r.push(`vindkast opptil ${r0(F.gust6)} m/s`); } else if (F.gust6 >= 15){ l = Math.max(l,1); r.push(`kraftige vindkast (${r0(F.gust6)} m/s)`); }
+  if (F.dark) tips.push("Mørkt – husk refleks.");
+  return out(l, r, tips.join(" "), F.T > 0 && !F.past.prec24 ? "Tørt og fint føre." : "Greit føre.", W_GO);
+}
+function run(F){
+  let l = 0, r = [], tips = [];
+  if (F.ice){ l = Math.max(l, F.ice); r.push(F.iceTxt); tips.push("Løp med piggsko, eller ta tredemølla."); }
+  if (F.snow){ l = Math.max(l, F.snow); r.push(F.snowTxt); }
+  if (F.feelsT <= -15){ l = 2; r.push(`bitende kaldt, føles som ${r0(F.feelsT)}°`); tips.push("Dekk til hud og pust gjennom buff."); }
+  else if (F.feelsT <= -8){ l = Math.max(l,1); r.push(`kaldt, føles som ${r0(F.feelsT)}°`); tips.push("Kle deg i lag."); }
+  else if (F.feelsT >= 26){ l = Math.max(l,1); r.push(`varmt, ${r0(F.feelsT)}°`); tips.push("Drikk nok og løp rolig."); }
+  if (F.heavyRain){ l = Math.max(l,1); r.push("kraftig regn"); }
+  if (F.gust6 >= 20){ l = 2; r.push(`vindkast opptil ${r0(F.gust6)} m/s`); } else if (F.gust6 >= 15){ l = Math.max(l,1); r.push("kraftig motvind i kastene"); }
+  if (F.dark) tips.push("Hodelykt og refleks.");
+  return out(l, r, tips.join(" "), F.T >= 3 && F.T <= 18 && !F.raining ? "Perfekt løpevær." : "Greit løpeforhold.", W_GO);
+}
+function bike(F){
+  let l = 0, r = [], tips = [];
+  if (F.ice){ l = 2; r.push(F.ice===2 ? F.iceTxt : "glatte partier – risikabelt på to hjul"); tips.push("Bare med piggdekk."); }
+  if (F.snow){ l = Math.max(l, F.snow>=2 || F.snowing ? 2 : 1); r.push(F.snowTxt); }
+  if (F.gust6 >= 14){ l = 2; r.push(`vindkast opptil ${r0(F.gust6)} m/s`); } else if (F.gust6 >= 10){ l = Math.max(l,1); r.push(`vindkast rundt ${r0(F.gust6)} m/s`); }
+  if (F.heavyRain){ l = Math.max(l,1); r.push("kraftig regn"); } else if (F.raining) r.push("vått");
+  if (F.dark) tips.push("Lys foran og bak.");
+  return out(l, r, tips.join(" "), "Fint sykkelvær.", W_BIKE);
+}
+function drive(F){
+  let l = 0, r = [], tips = [];
+  if (F.ice === 2){ l = 2; r.push(F.iceTxt); }
+  else if (F.ice === 1){ l = 1; r.push("fare for glatte partier, særlig på broer og i skygge"); }
+  if (F.snow){ l = Math.max(l, F.snow); r.push(F.snowTxt); }
+  if (F.fog){ l = Math.max(l,1); r.push("tåke og dårlig sikt"); }
+  if (F.heavyRain){ l = Math.max(l,1); r.push("kraftig regn og fare for vannplaning"); }
+  if (F.gust6 >= 20){ l = Math.max(l,1); r.push(`vindkast opptil ${r0(F.gust6)} m/s – obs på broer og fjelloverganger`); }
+  if (F.ice || F.snow) tips.push("Senk farten og hold god avstand.");
+  if (F.dark && (F.ice || F.snow || F.raining || F.fog)) tips.push("Mørkt i tillegg – ekstra forsiktig.");
+  return out(l, r, tips.join(" "), F.raining ? "Våt vei, ellers greit." : "Fint kjøreføre.", W_CAR);
+}
+
+const LVLC = ["#3ecf6a","#f5c33d","#f2503a"];
+function renderFore(R){
+  const {F, A} = R;
+  const sumTxt = F.ice===2 ? "Svært glatt" : F.ice===1 ? "Fare for glatte partier" : F.snow ? cap(F.snowTxt) : F.raining ? "Vått" : F.T > 0 ? "Tørt og fint" : "Kaldt og tørt";
+  const sumLvl = Math.max(F.ice, F.snow ? 1 : 0);
+  $("foreSum").innerHTML = `<span class="fbadge" style="background:${LVLC[sumLvl]}">${sumTxt}</span>`;
+  $("fore").innerHTML = A.map(a => `<div class="fa">
+      <div class="fah"><span class="fae">${a.emo}</span><b>${a.name}</b><span class="fbadge" style="background:${LVLC[a.lvl]}">${a.head}</span></div>
+      <div class="fat">${esc(a.text)}</div></div>`).join("");
+  const p = F.past, chips = [`Luft ${r1(F.T)}°`];
+  if (p.ground!=null) chips.push(`Bakke ${r1(p.ground)}°`);
+  if (p.ok){ chips.push(`Regn siste 12 t ${r1(p.rain12)} mm`); chips.push(`Nysnø siste døgn ${r0(p.snow24)} cm`); if (p.depth>0.5) chips.push(`Snødybde ${r0(p.depth)} cm`); }
+  chips.push(`Fuktighet ${r0(F.RH)} %`);
+  $("foreNote").innerHTML = `Vurdert ut fra: ${chips.join(" · ")}${p.ok?"":" · <i>uten data for siste døgn</i>"}. Dette er beregnet ut fra været og er ikke en offisiell føremelding – lokale forhold kan avvike.`;
+}
+/* ---------- Start ---------- */
+renderFavs();
+document.documentElement.classList.toggle("light", isLight());
+load().then(()=>{ if (radMode==="rv") ensureMap(); });
+setInterval(load, 10*60*1000);
+</script>
+</body>
+</html>
