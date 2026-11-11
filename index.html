@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b3b6f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Været">
 <title>Været – live varsel og radar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -18,9 +21,10 @@
 html,body{min-height:100%}
 body{
   font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--text);
-  background:linear-gradient(160deg,var(--bg1),var(--bg2));background-attachment:fixed;
-  transition:background 1.2s ease;-webkit-font-smoothing:antialiased;
+  background:var(--bg2);-webkit-font-smoothing:antialiased;
 }
+/* Fast bakgrunn som et eget lag – fungerer også på iPhone (der background-attachment:fixed ikke støttes) */
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(160deg,var(--bg1),var(--bg2));transition:opacity .8s}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:0}
 .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:22px 20px 60px}
 header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
@@ -43,6 +47,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22p
 .card{background:var(--glass);border:1px solid var(--line);border-radius:22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 .h{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .grid{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+.grid-dr{grid-template-columns:1fr 1.25fr}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 
 /* Hero */
@@ -202,6 +207,45 @@ canvas.chart{width:100%;height:210px;display:block;margin-top:14px}
 .fbadge{font-size:12px;font-weight:700;color:#10151f;padding:3px 9px;border-radius:999px;text-transform:none;letter-spacing:0;white-space:nowrap}
 .fat{font-size:14px;line-height:1.5}
 html.light .fa{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
+#map.kvdark .basetile{filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.95) saturate(.6)}
+/* Klær og beste tid */
+.fextra{display:grid;grid-template-columns:1fr 1.4fr;gap:12px;margin-bottom:12px}
+@media(max-width:900px){.fextra{grid-template-columns:1fr}}
+.fx1{display:flex;gap:12px;align-items:flex-start;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 15px}
+.fx1 .fxe{font-size:24px;line-height:1}.fx1 b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
+.fx1 .fxt{font-size:15px;line-height:1.5}.fx1 .fxs{font-size:13px;color:var(--muted);margin-top:4px}
+.tl{display:flex;gap:2px;margin-top:10px;height:10px}.tl i{flex:1;border-radius:3px;opacity:.9}.tl i.best{outline:2px solid var(--text);outline-offset:1px}
+.tlab{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
+html.light .fx1{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
+/* Mobil */
+@media(max-width:600px){
+  .wrap{padding:14px 12px 40px}
+  header{gap:8px;margin-bottom:14px}
+  .brand{font-size:18px;width:100%}
+  .search{order:3;min-width:0;max-width:none;flex-basis:100%}
+  #geo{flex:1;justify-content:center}
+  .hero{padding:20px 18px;min-height:0}
+  .place{font-size:22px}
+  .now .ico{width:84px;height:84px}
+  .temp{font-size:76px}.temp sup{font-size:30px}
+  .details{padding:12px;gap:8px}
+  .tile{padding:11px 12px;min-height:84px}.tile .v{font-size:20px}
+  .pad{padding:16px 14px}
+  .grid,.grid3,section.grid{gap:12px}
+  section{margin-top:12px}
+  #map{height:360px}
+  canvas.chart{height:170px}
+  .alert summary{font-size:14px}.atime{margin-left:0;width:100%}
+  .abody{padding-left:16px}
+  .mbox{padding:18px 14px;max-height:92vh}
+  .mt td{padding:5px 3px;font-size:13px}
+  .mtemp{font-size:20px}
+  .aqgrid{gap:5px}
+  .rctl{gap:8px}.rtime{min-width:0;font-size:14px}
+  .legend .lg{width:90px}
+  .h{flex-wrap:wrap}
+}
+@media(hover:none){ .btn,.seg button,.fav,.day{min-height:40px} }
 /* Lys modus */
 html.light{--glass:rgba(255,255,255,.55);--glass2:rgba(255,255,255,.78);--line:rgba(15,27,45,.13);--text:#0f1b2d;--muted:rgba(15,27,45,.62);--accent:#1f6fd1;--rain:#1a6fd6}
 html.light .tile,html.light .hr,html.light .aqgrid div,html.light .kv div,html.light .tide{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
@@ -278,6 +322,7 @@ footer a{color:var(--accent);text-decoration:none}
 
   <section class="card pad" id="foreCard">
     <div class="h"><span>Føre nå · gå, løpe, sykle, kjøre</span><span id="foreSum"></span></div>
+    <div class="fextra" id="foreExtra"></div>
     <div class="fore" id="fore"><div class="s">Vurderer føret …</div></div>
     <div class="note" id="foreNote"></div>
   </section>
@@ -290,7 +335,7 @@ footer a{color:var(--accent);text-decoration:none}
     <canvas class="chart" id="chart"></canvas>
   </section>
 
-  <section class="grid" style="grid-template-columns:1fr 1.25fr">
+  <section class="grid grid-dr">
     <div class="card pad">
       <div class="h"><span>10 dagers varsel</span></div>
       <div id="days"></div>
@@ -355,7 +400,7 @@ footer a{color:var(--accent);text-decoration:none}
     Zoombar radar: <a href="https://www.rainviewer.com/" target="_blank">RainViewer</a> ·
     Tidevann: <a href="https://kartverket.no/til-sjos/se-havniva" target="_blank">Kartverket</a> ·
     Målinger: <a href="https://frost.met.no/" target="_blank">MET Frost</a> ·
-    Kart: © <a href="https://www.esri.com/" target="_blank">Esri</a>, © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a><br>
+    Kart: © <a href="https://www.kartverket.no/" target="_blank">Kartverket</a>, © <a href="https://www.esri.com/" target="_blank">Esri</a>, © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a><br>
     <span id="upd"></span>
   </footer>
 </div>
@@ -777,7 +822,6 @@ function setTheme(code, day){
   const c = cat(code), light = isLight();
   const t = THEMES[c][day?0:1].map(x => light ? mix(x,"#ffffff", day?.5:.38) : x);
   document.documentElement.style.setProperty("--bg1", t[0]); document.documentElement.style.setProperty("--bg2", t[1]);
-  document.body.style.background = `linear-gradient(160deg, ${t[0]}, ${t[1]}) fixed`;
   let mode = null, n = 0;
   if (["drizzle","rain","showers","thunder","sleet"].includes(c)) { mode="rain"; n = c==="drizzle"?60:c==="rain"||c==="thunder"?160:100; }
   else if (["snow","snowshowers"].includes(c)) { mode="snow"; n = 110; }
@@ -810,10 +854,12 @@ const fx = (()=>{
 let baseL, labL, map, marker, frames=[], layers=[], fi=0, playing=true, timer=null, host="";
 function initMap(){
   map = L.map("map",{zoomControl:true, attributionControl:true, maxZoom:12}).setView([loc.lat,loc.lon], 7);
-  baseL = L.tileLayer(tileUrl("nolabels"),{maxZoom:12, subdomains:"abcd",
-    attribution:'Kart © <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, © OpenStreetMap · Radar © <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
+  baseL = L.tileLayer(tileUrl("nolabels"),{maxZoom:12, className:"basetile",
+    attribution:'Kart © <a href="https://www.kartverket.no/">Kartverket</a> (Norge), © <a href="https://www.esri.com/">Esri</a>, OpenStreetMap · Radar © <a href="https://www.rainviewer.com/">RainViewer</a>'}).addTo(map);
+  baseL.on("tileerror", () => { if (useKV() && ++kvErr > 6){ kvFailed = true; console.warn("Kartverket svarer ikke – bruker Esri"); applyBase(); } });
   map.createPane("labels"); map.getPane("labels").style.zIndex=450; map.getPane("labels").style.pointerEvents="none";
-  labL = L.tileLayer(tileUrl("only_labels"),{maxZoom:12, subdomains:"abcd", pane:"labels"}).addTo(map);
+  labL = L.tileLayer(tileUrl("only_labels"),{maxZoom:12, pane:"labels"}).addTo(map);
+  applyBase();
   marker = L.marker([loc.lat,loc.lon],{icon:L.divIcon({className:"",html:'<div class="pulse"></div>',iconSize:[14,14]}), zIndexOffset:1000}).addTo(map);
   loadRadar();
   setInterval(loadRadar, 5*60*1000);
@@ -825,7 +871,7 @@ function ensureMap(){
   try { initMap(); return true; }
   catch(e){ console.error(e); $("rvNote").textContent = "Kartet kunne ikke startes: " + e.message; return false; }
 }
-function updateRadarCenter(){ setMetArea(); if(!map) return; map.setView([loc.lat,loc.lon], map.getZoom()); marker.setLatLng([loc.lat,loc.lon]); }
+function updateRadarCenter(){ setMetArea(); if(!map) return; applyBase(); map.setView([loc.lat,loc.lon], map.getZoom()); marker.setLatLng([loc.lat,loc.lon]); }
 async function loadRadar(){
   try{
     const r = await fetch("https://api.rainviewer.com/public/weather-maps.json"); const j = await r.json();
@@ -932,12 +978,13 @@ $("geo").onclick = () => {
   $("geo").style.opacity=.5;
   navigator.geolocation.getCurrentPosition(async p => {
     $("geo").style.opacity=1;
-    const lat=+p.coords.latitude.toFixed(4), lon=+p.coords.longitude.toFixed(4);
+    // Avrundet til 2 desimaler (ca. 1 km) – nok for værvarsel, men avslører ikke adressen din
+    const lat=+p.coords.latitude.toFixed(2), lon=+p.coords.longitude.toFixed(2);
     let name="Min posisjon", sub="";
     try{ const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=no`);
       const j = await r.json(); name = j.locality||j.city||name; sub=[j.principalSubdivision,j.countryName].filter(Boolean).join(", "); }catch(e){}
     setLoc({name, sub, lat, lon, tz: Intl.DateTimeFormat().resolvedOptions().timeZone});
-  }, err => { $("geo").style.opacity=1; showErr("Fikk ikke tilgang til posisjonen din. Søk etter sted i stedet."); }, {enableHighAccuracy:true, timeout:10000});
+  }, err => { $("geo").style.opacity=1; showErr("Fikk ikke tilgang til posisjonen din. Søk etter sted i stedet."); }, {enableHighAccuracy:false, timeout:10000, maximumAge:600000});
 };
 
 /* =====================================================================
@@ -961,14 +1008,24 @@ function mix(hex, hex2, t){
   const p = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); const a=p(hex), b=p(hex2);
   return "#" + a.map((v,i)=>Math.round(v+(b[i]-v)*t).toString(16).padStart(2,"0")).join("");
 }
-// Esri sitt grå kartgrunnlag – krever ingen API-nøkkel (CARTO gjør det nå)
+// Bakgrunnskart: Kartverket (åpent, CC BY 4.0) i Norge – Esri utenfor Norge eller hvis Kartverket ikke svarer
+let kvFailed = false, kvErr = 0;
+const inNorway = () => loc.lat > 57.8 && loc.lat < 71.5 && loc.lon > 4 && loc.lon < 31.5;
+const useKV = () => inNorway() && !kvFailed;
 function tileUrl(kind){
+  if (kind !== "only_labels" && useKV()) return "https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png";
   const tone = isLight() ? "Light" : "Dark", part = kind==="only_labels" ? "Reference" : "Base";
   return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${tone}_Gray_${part}/MapServer/tile/{z}/{y}/{x}`;
 }
+function applyBase(){
+  if (!baseL) return;
+  baseL.setUrl(tileUrl("nolabels")); labL.setUrl(tileUrl("only_labels"));
+  labL.setOpacity(useKV() ? 0 : 1);                       // Kartverket-kartet har egne stedsnavn
+  $("map").classList.toggle("kvdark", useKV() && !isLight()); // mørk variant av Kartverket via filter
+}
 function applyMode(){
   document.documentElement.classList.toggle("light", isLight());
-  if (baseL){ baseL.setUrl(tileUrl("nolabels")); labL.setUrl(tileUrl("only_labels")); }
+  applyBase();
   if (wx){ setTheme(wx.current.weather_code, wx.current.is_day); drawChart(currentHi()); }
 }
 mq.addEventListener && mq.addEventListener("change", () => { if (uiMode==="auto") applyMode(); });
@@ -1355,12 +1412,84 @@ function drive(F){
   return out(l, r, tips.join(" "), F.raining ? "Våt vei, ellers greit." : "Fint kjøreføre.", W_CAR);
 }
 
+/* ---------- Klær-råd ---------- */
+function clothes(F){
+  const H = wx.hourly, hi = currentHi();
+  const idx = [0,1,2,3].map(k => hi+k).filter(i => i < H.time.length);
+  const fl = Math.min(F.feelsT ?? F.T, ...idx.map(i => feels(H.temperature_2m[i], H.wind_speed_10m[i])));
+  let base;
+  if (fl >= 22) base = "T-skjorte og shorts";
+  else if (fl >= 16) base = "T-skjorte, ta med en tynn genser";
+  else if (fl >= 11) base = "Genser eller lett jakke";
+  else if (fl >= 6) base = "Jakke og lange bukser";
+  else if (fl >= 1) base = "Varm jakke, gjerne lue";
+  else if (fl >= -6) base = "Vinterjakke, lue og votter";
+  else if (fl >= -14) base = "Vinterjakke, ullundertøy, lue, votter og skjerf";
+  else base = "Full vinterpakke: ull innerst, dunjakke, ullsokker, lue, votter og buff";
+  const add = [], p4 = sum(idx.map(i => H.precipitation[i]));
+  if (F.ice) add.push("brodder");
+  if (F.snowing || F.snow) add.push("vintersko med godt grep");
+  if (!F.snowing){
+    if (p4 >= 3) add.push("regntøy og vanntette sko");
+    else if (p4 >= 0.3) add.push(F.gust6 >= 10 ? "regnjakke – for mye vind til paraply" : "regnjakke eller paraply");
+  }
+  if (p4 < 0.3){
+    const j = H.precipitation.slice(hi+4, hi+12).findIndex(v => v >= 0.5);
+    if (j >= 0){ const k = hi+4+j; add.push(H.temperature_2m[k] <= 0.5 ? `snøklær fra ca. kl. ${H.time[k].slice(11,13)}` : `regnjakke fra ca. kl. ${H.time[k].slice(11,13)}`); }
+  }
+  const uvs = (H.uv_index||[]).slice(hi, hi+6).filter(v => v!=null);
+  if (uvs.length && Math.max(...uvs) >= 3) add.push("solbriller og solkrem");
+  if (F.dark) add.push("refleks");
+  return {text: base + (add.length ? ", " + add.join(", ") : "") + ".", sub: `Føles som ${r0(fl)}° de neste timene`};
+}
+
+/* ---------- Beste tid ute ---------- */
+function bestTime(F){
+  const H = wx.hourly, hi = currentHi(), end = Math.min(H.time.length, hi+16);
+  const D = wx.daily, today = D.time[0];
+  const sr = D.sunrise[0] ? D.sunrise[0].slice(11,16) : null, ss = D.sunset[0] ? D.sunset[0].slice(11,16) : null;
+  const pp = H.precipitation_probability || [];
+  const score = i => {
+    const hr = H.time[i].slice(11,16), h = +hr.slice(0,2), fl = feels(H.temperature_2m[i], H.wind_speed_10m[i]);
+    let s = 100 - (H.precipitation[i]||0)*25 - (pp[i]!=null ? pp[i]*0.3 : 0) - Math.max(0,(H.wind_gusts_10m[i]||0)-8)*3 - Math.abs(fl-12)*1.2;
+    const dk = (H.time[i].slice(0,10)===today && sr && ss) ? (hr < sr || hr > ss) : !H.is_day[i];
+    if (dk) s -= 15;
+    if (h >= 23 || h < 6) s -= 45;            // natt
+    return s;
+  };
+  const S = []; for (let i = hi; i < end; i++) S.push(score(i));
+  if (S.length < 2) return null;
+  let best = 0, worst = 0;
+  for (let k = 0; k < S.length-1; k++){
+    const a = (S[k]+S[k+1])/2;
+    if (a > (S[best]+S[best+1])/2) best = k;
+    if (a < (S[worst]+S[worst+1])/2) worst = k;
+  }
+  const i0 = hi+best, i1 = i0+1, day = H.time[i0].slice(0,10) === today ? "" : "i morgen ";
+  const pr = (H.precipitation[i0]||0)+(H.precipitation[i1]||0);
+  const t = (H.temperature_2m[i0]+H.temperature_2m[i1])/2, g = Math.max(H.wind_gusts_10m[i0]||0, H.wind_gusts_10m[i1]||0);
+  const end2 = String((+H.time[i1].slice(11,13)+1)%24).padStart(2,"0");
+  const desc = [pr < 0.1 ? "opphold" : `${r1(pr)} mm nedbør`, `${r0(t)}°`, g < 6 ? "lite vind" : g < 12 ? `vindkast ${r0(g)} m/s` : `kraftige kast ${r0(g)} m/s`];
+  let text = `${cap(day)}kl. ${H.time[i0].slice(11,13)}–${end2}: ${desc.join(", ")}.`;
+  if (day) text = text[0].toUpperCase() + text.slice(1);
+  const w0 = hi+worst, wp = (H.precipitation[w0]||0)+(H.precipitation[w0+1]||0);
+  let sub = "";
+  if (wp >= 1) sub = `Unngå kl. ${H.time[w0].slice(11,13)}–${String((+H.time[w0+1].slice(11,13)+1)%24).padStart(2,"0")}: ${r1(wp)} mm nedbør.`;
+  if (F.ice) sub = (sub ? sub + " " : "") + "Glatt uansett tidspunkt – bruk brodder.";
+  const col = s => s >= 70 ? "#3ecf6a" : s >= 45 ? "#f5c33d" : "#f2503a";
+  const cells = S.map((s,k) => `<i style="background:${col(s)}" class="${k===best||k===best+1?"best":""}" title="kl. ${H.time[hi+k].slice(11,13)}"></i>`).join("");
+  const lab = `<span>Nå</span><span>${H.time[hi+Math.floor(S.length/2)].slice(11,13)}</span><span>${H.time[hi+S.length-1].slice(11,13)}</span>`;
+  return {text, sub, cells, lab};
+}
 const LVLC = ["#3ecf6a","#f5c33d","#f2503a"];
 function renderFore(R){
   const {F, A} = R;
   const sumTxt = F.ice===2 ? "Svært glatt" : F.ice===1 ? "Fare for glatte partier" : F.snow ? cap(F.snowTxt) : F.raining ? "Vått" : F.T > 0 ? "Tørt og fint" : "Kaldt og tørt";
   const sumLvl = Math.max(F.ice, F.snow ? 1 : 0);
   $("foreSum").innerHTML = `<span class="fbadge" style="background:${LVLC[sumLvl]}">${sumTxt}</span>`;
+  const cl = clothes(F), bt = bestTime(F);
+  $("foreExtra").innerHTML = `<div class="fx1"><span class="fxe">🧥</span><div><b>Klær nå</b><div class="fxt">${esc(cl.text)}</div><div class="fxs">${esc(cl.sub)}</div></div></div>`
+    + (bt ? `<div class="fx1"><span class="fxe">⏱</span><div style="flex:1"><b>Beste tid ute</b><div class="fxt">${esc(bt.text)}</div>${bt.sub?`<div class="fxs">${esc(bt.sub)}</div>`:""}<div class="tl">${bt.cells}</div><div class="tlab">${bt.lab}</div></div></div>` : "");
   $("fore").innerHTML = A.map(a => `<div class="fa">
       <div class="fah"><span class="fae">${a.emo}</span><b>${a.name}</b><span class="fbadge" style="background:${LVLC[a.lvl]}">${a.head}</span></div>
       <div class="fat">${esc(a.text)}</div></div>`).join("");
