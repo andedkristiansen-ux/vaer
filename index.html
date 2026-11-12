@@ -209,10 +209,10 @@ canvas.chart{width:100%;height:210px;display:block;margin-top:14px}
 html.light .fa{background:rgba(255,255,255,.5);border-color:rgba(15,27,45,.07)}
 #map.kvdark .basetile{filter:invert(1) hue-rotate(180deg) brightness(.8) contrast(.95) saturate(.6)}
 /* Klær og beste tid */
-.fextra{display:grid;grid-template-columns:1fr 1.4fr;gap:12px;margin-bottom:12px}
+.fextra{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px}
 @media(max-width:900px){.fextra{grid-template-columns:1fr}}
 .fx1{display:flex;gap:12px;align-items:flex-start;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 15px}
-.fx1 .fxe{font-size:24px;line-height:1}.fx1 b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
+.fx1 .fxe{font-size:24px;line-height:1}.fx1 b{display:flex;align-items:center;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
 .fx1 .fxt{font-size:15px;line-height:1.5}.fx1 .fxs{font-size:13px;color:var(--muted);margin-top:4px}
 .tl{display:flex;gap:2px;margin-top:10px;height:10px}.tl i{flex:1;border-radius:3px;opacity:.9}.tl i.best{outline:2px solid var(--text);outline-offset:1px}
 .tlab{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
@@ -559,7 +559,7 @@ async function loadMET(){
 
   // Time for time
   const H = {time:[],temperature_2m:[],apparent_temperature:[],precipitation:[],precipitation_probability:[],weather_code:[],
-    is_day:[],wind_speed_10m:[],wind_gusts_10m:[],wind_direction_10m:[],uv_index:[]};
+    is_day:[],wind_speed_10m:[],wind_gusts_10m:[],wind_direction_10m:[],uv_index:[],cloud_cover:[]};
   for (const e of ts){
     const n1 = e.data.next_1_hours; if (!n1) continue;
     const d = e.data.instant.details, s = sym(n1.summary.symbol_code);
@@ -569,6 +569,7 @@ async function loadMET(){
     H.weather_code.push(s.code); H.is_day.push(s.day);
     H.wind_speed_10m.push(d.wind_speed); H.wind_gusts_10m.push(d.wind_speed_of_gust ?? d.wind_speed);
     H.wind_direction_10m.push(d.wind_from_direction); H.uv_index.push(d.ultraviolet_index_clear_sky ?? null);
+    H.cloud_cover.push(d.cloud_area_fraction ?? null);
   }
 
   // Dag for dag
@@ -656,7 +657,7 @@ async function load(){
       console.warn("MET feilet, bruker Open-Meteo", metErr);
       try { const r = await fetch(url("metno_seamless,best_match")); if(!r.ok) throw 0; d = merge(await r.json()); }
       catch(e){ const r = await fetch(url(null)); if(!r.ok) throw new Error("Kunne ikke hente værdata ("+r.status+")"); d = merge(await r.json()); }
-      d.source = "Open-Meteo (reserve)";
+      d.source = "Open-Meteo (reserve)"; d.uvCloudAdjusted = true;
       const h = d.hourly;
       d.steps = h.time.map((t,i)=>({time:t,hours:1,code:h.weather_code[i],day:h.is_day[i],temp:h.temperature_2m[i],
         precip:h.precipitation[i]||0,prob:h.precipitation_probability?h.precipitation_probability[i]:null,
@@ -705,7 +706,7 @@ function render(){
 
   // Details
   let hi = h.time.findIndex(t => t.slice(0,13) === localNow.slice(0,13)); if (hi<0) hi=0;
-  const uv = h.uv_index ? h.uv_index[hi] : d.uv_index_max[0];
+  const uv = h.uv_index ? uvAt(hi) : d.uv_index_max[0];
   const uvTxt = uv==null?"":uv<3?"Lav":uv<6?"Moderat":uv<8?"Høy":uv<11?"Svært høy":"Ekstrem";
   const dl = d.daylight_duration ? d.daylight_duration[0] : null;
   const dn = dirName(c.wind_direction_10m);
@@ -1497,6 +1498,53 @@ function drive(F){
   return out(l, r, tips.join(" "), F.raining ? "Våt vei, ellers greit." : "Fint kjøreføre.", W_CAR);
 }
 
+/* ---------- Sol og UV ---------- */
+// MET gir UV for skyfri himmel. Skyer demper UV (Kasten–Czeplak-tilnærming): tynne skyer lite, tett overskyet mye.
+const cloudFactor = cc => cc == null ? 1 : 1 - 0.75 * Math.pow(Math.min(100,Math.max(0,cc))/100, 3.4);
+function uvAt(i){
+  const H = wx.hourly, u = H.uv_index ? H.uv_index[i] : null;
+  if (u == null) return null;
+  return wx.uvCloudAdjusted ? u : u * cloudFactor(H.cloud_cover ? H.cloud_cover[i] : null);
+}
+const UVL = [[3,"Lav","#3ecf6a"],[6,"Moderat","#f5d33d"],[8,"Sterk","#f59a3d"],[11,"Svært sterk","#f2503a"],[1e9,"Ekstrem","#a64bd6"]];
+const uvLvl = v => UVL.find(l => v < l[0]);
+function sunUV(F){
+  const H = wx.hourly, hi = currentHi(), today = wx.current.time.slice(0,10);
+  const idx = []; for (let i = hi; i < H.time.length && H.time[i].slice(0,10) === today; i++) idx.push(i);
+  if (!idx.length || !H.uv_index) return null;
+  const U = idx.map(i => Math.max(0, uvAt(i) ?? 0));
+  const rawMax = Math.max(...U), max = Math.round(rawMax*10)/10, pk = idx[U.indexOf(rawMax)];
+  const hh = i => H.time[i].slice(11,13);
+  // Tidsrom der UV er over en grense (3 = bruk solbeskyttelse, 6 = søk skygge)
+  const spanOver = lim => { const w = idx.filter((i,k) => U[k] >= lim - 0.05); if (!w.length) return "";
+    const end = String(+hh(w[w.length-1])+1).padStart(2,"0"); return w[0]===hi ? `nå og frem til kl. ${end}` : `kl. ${hh(w[0])}–${end}`; };
+  const span = spanOver(3), shade = spanOver(6) || "midt på dagen";
+  const L = uvLvl(max), cc = H.cloud_cover ? H.cloud_cover[hi] : null;
+  const snowy = F.past && F.past.depth > 0.5;
+  let text, tips = [];
+  if (max < 0.5 && F.dark) text = "Sola er nede – ingen UV resten av dagen.";
+  else if (max < 3){
+    text = `Lav UV i dag (maks ${r1(max)}). Du trenger ikke solbeskyttelse.`;
+    if (snowy && max >= 1) tips.push("Solbriller er lurt – snøen reflekterer lyset.");
+  } else if (max < 6){
+    text = `Moderat UV, maks ${r1(max)} ca. kl. ${hh(pk)}. Bruk solkrem og solbriller hvis du er ute en stund ${span}, og ta pauser i skyggen midt på dagen.`;
+  } else if (max < 8){
+    text = `Sterk sol, maks ${r1(max)} ca. kl. ${hh(pk)}. Bruk solkrem, solbriller og noe på hodet ${span}, og søk skygge ${shade}. Smør på igjen etter bading og svette.`;
+  } else if (max < 11){
+    text = `Svært sterk sol, maks ${r1(max)} ca. kl. ${hh(pk)}. Unngå sola ${shade} og hold deg mest mulig i skyggen. Bruk klær, solhatt, solbriller og solkrem ${span}.`;
+  } else {
+    text = `Ekstremt sterk sol, maks ${r1(max)}. Hold deg inne eller i skyggen ${shade}. Full solbeskyttelse er nødvendig ${span}.`;
+  }
+  if (max >= 3){
+    tips.push("Tommelfingerregel: er skyggen din like lang som deg eller kortere, er sola sterk nok til at du bør beskytte deg.");
+    if (cc != null && cc >= 50) tips.push("UV går gjennom tynne skyer, så beskytt deg selv om det er overskyet.");
+    if (snowy) tips.push("Snø reflekterer sola og gjør UV-strålingen sterkere.");
+  }
+  if ((F.feelsT ?? F.T) >= 25) tips.push("Varmt – drikk nok vann og ta pauser i skyggen.");
+  const cells = U.map((u,k) => `<i style="background:${uvLvl(u)[2]};opacity:${u<0.5?.25:.9}" title="kl. ${hh(idx[k])}: UV ${r1(u)}"></i>`).join("");
+  const lab = `<span>${idx[0]===hi?"Nå":hh(idx[0])}</span><span>${hh(idx[Math.floor(idx.length/2)])}</span><span>${hh(idx[idx.length-1])}</span>`;
+  return {max, L, text, tips, cells, lab, many: idx.length > 1};
+}
 /* ---------- Klær-råd ---------- */
 function clothes(F){
   const H = wx.hourly, hi = currentHi();
@@ -1522,7 +1570,7 @@ function clothes(F){
     const j = H.precipitation.slice(hi+4, hi+12).findIndex(v => v >= 0.5);
     if (j >= 0){ const k = hi+4+j; add.push(H.temperature_2m[k] <= 0.5 ? `snøklær fra ca. kl. ${H.time[k].slice(11,13)}` : `regnjakke fra ca. kl. ${H.time[k].slice(11,13)}`); }
   }
-  const uvs = (H.uv_index||[]).slice(hi, hi+6).filter(v => v!=null);
+  const uvs = (H.uv_index||[]).slice(hi, hi+6).map((v,k) => uvAt(hi+k)).filter(v => v!=null);
   if (uvs.length && Math.max(...uvs) >= 3) add.push("solbriller og solkrem");
   if (F.dark) add.push("refleks");
   return {text: base + (add.length ? ", " + add.join(", ") : "") + ".", sub: `Føles som ${r0(fl)}° de neste timene`};
@@ -1574,6 +1622,10 @@ function renderFore(R){
   $("foreSum").innerHTML = `<span class="fbadge" style="background:${LVLC[sumLvl]}">${sumTxt}</span>`;
   const cl = clothes(F), bt = bestTime(F);
   $("foreExtra").innerHTML = `<div class="fx1"><span class="fxe">🧥</span><div><b>Klær nå</b><div class="fxt">${esc(cl.text)}</div><div class="fxs">${esc(cl.sub)}</div></div></div>`
+    + (() => { const u = sunUV(F); if (!u) return "";
+        return `<div class="fx1"><span class="fxe">☀️</span><div style="flex:1"><b>Sol og UV <span class="fbadge" style="background:${u.L[2]};margin-left:6px">${u.L[1]}</span></b>
+          <div class="fxt">${esc(u.text)}</div>${u.tips.map(t=>`<div class="fxs">${esc(t)}</div>`).join("")}
+          ${u.many && u.max >= 0.5 ? `<div class="tl">${u.cells}</div><div class="tlab">${u.lab}</div>` : ""}</div></div>`; })()
     + (bt ? `<div class="fx1"><span class="fxe">⏱</span><div style="flex:1"><b>Beste tid ute</b><div class="fxt">${esc(bt.text)}</div>${bt.sub?`<div class="fxs">${esc(bt.sub)}</div>`:""}<div class="tl">${bt.cells}</div><div class="tlab">${bt.lab}</div></div></div>` : "");
   $("fore").innerHTML = A.map(a => `<div class="fa">
       <div class="fah"><span class="fae">${a.emo}</span><b>${a.name}</b><span class="fbadge" style="background:${LVLC[a.lvl]}">${a.head}</span></div>
