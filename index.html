@@ -1495,7 +1495,7 @@ function drive(F){
   if (F.heavyRain){ l = Math.max(l,1); r.push("kraftig regn og fare for vannplaning"); }
   if (F.gust6 >= 20){ l = Math.max(l,1); r.push(`vindkast opptil ${r0(F.gust6)} m/s – obs på broer og fjelloverganger`); }
   if (F.ice || F.snow) tips.push("Senk farten og hold god avstand.");
-  if (F.glare && F.glare.low.length){ r.push(F.glare.drive.charAt(0).toLowerCase() + F.glare.drive.slice(1)); tips.push("Ha solbriller i bilen og hold frontruta ren."); if (F.glare.wet) l = Math.max(l,1); }
+  if (F.glare && F.glare.low.some(i => i < currentHi()+6)){ r.push(F.glare.drive.charAt(0).toLowerCase() + F.glare.drive.slice(1)); tips.push("Ha solbriller i bilen og hold frontruta ren."); if (F.glare.wet) l = Math.max(l,1); }
   if (F.dark && (F.ice || F.snow || F.raining || F.fog)) tips.push("Mørkt i tillegg – ekstra forsiktig.");
   return out(l, r, tips.join(" "), F.raining ? "Våt vei, ellers greit." : "Fint kjøreføre.", W_CAR);
 }
@@ -1620,7 +1620,7 @@ function clothes(F){
   }
   const uvs = (H.uv_index||[]).slice(hi, hi+6).map((v,k) => uvAt(hi+k)).filter(v => v!=null);
   if (uvs.length && Math.max(...uvs) >= 3) add.push("solbriller og solkrem");
-  else if (F.glare && (F.glare.low.length || F.glare.snowy)) add.push("solbriller – sola blender");
+  else if (F.glare && F.glare.up.some(i => i < hi+4) && (F.glare.low.some(i => i < hi+4) || F.glare.snowy)) add.push("solbriller – sola blender");
   if (F.dark) add.push("refleks");
   return {text: base + (add.length ? ", " + add.join(", ") : "") + ".", sub: `Føles som ${r0(fl)}° de neste timene`};
 }
